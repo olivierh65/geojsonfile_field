@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * @file
+ * Contains geojsonfile_field.module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+ * Implements hook_help().
+ */
+function geojsonfile_field_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+      // Main module help for the geojsonfile_field module.
+    case 'help.page.geojsonfile_field':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Leaflet map editor') . '</p>';
+      return $output;
+
+    default:
+  }
+}
+

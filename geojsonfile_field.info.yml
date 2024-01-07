@@ -1,0 +1,6 @@
+name: 'geojsonfile_field'
+type: module
+description: 'A field to store geojson file with style'
+core_version_requirement: ^9 || ^10
+package: 'Custom'
+dependencies:
