@@ -34,7 +34,6 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
     ];
   }
 
-
   /**
    * {@inheritdoc}
    */

@@ -2,21 +2,11 @@
 
 namespace Drupal\geojsonfile_field\Plugin\Field\FieldType;
 
-use Drupal\Component\Utility\Random;
-use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Field\FieldDefinitionInterface;
+
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
-use Drupal\Core\File\Exception\FileException;
-use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\StreamWrapper\StreamWrapperInterface;
-use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\TypedData\DataDefinition;
-use Drupal\file\Element\ManagedFile;
-use Drupal\file\Entity\File;
 use Drupal\file\Plugin\Field\FieldType\FileItem;
-use Symfony\Component\Mime\MimeTypeGuesserInterface;
-use Drupal\file\Plugin\Field\FieldFormatter;
+use Drupal\Core\Form\FormStateInterface;
 
 /**
  * Plugin implementation of the 'Geojson' field type.
@@ -73,7 +63,7 @@ class GeoJsonFile extends FileItem {
     // Add our setting to show/hide the description field
     $settings['description_field'] = TRUE;
 
-    $settings['file_extensions'] = 'geojson,gpx';
+    $settings['file_extensions'] = 'geojson';
     $settings['multiple'] = true;
 
     $settings['stroke'] = TRUE;
@@ -92,6 +82,15 @@ class GeoJsonFile extends FileItem {
 
     // unset($settings['description_field']);
     return $settings;
+  }
+
+  public function storageSettingsForm(array &$form, FormStateInterface $form_state, $has_data) {
+    $element=parent::storageSettingsForm($form, $form_state, $has_data);
+    // Hide display
+    $element['display_field']['#access']=false;
+    $element['display_default']['#access']=false;
+
+    return $element;
   }
 
   /**
