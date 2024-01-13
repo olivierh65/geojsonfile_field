@@ -25,6 +25,7 @@ use Drupal\Core\Security\TrustedCallbackInterface;
  */
 class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
 
+
   /**
    * {@inheritdoc}
    */
@@ -33,6 +34,7 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
       'managedFile',
     ];
   }
+
 
   /**
    * {@inheritdoc}
@@ -43,7 +45,7 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
 
     // Get the parents form elements
     $element = parent::formElement($items, $delta, $element, $form, $form_state);
-    $elelent['#multiple']=true;
+    $element['#multiple'] = false;
     /* $element['#upload_validators'] = [
       'file_validate_extensions' => ['gpx gepjson'],
     ];
@@ -238,8 +240,7 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
     if ($form_state->getValue($data)) {
       $a = unserialize($form_state->getValue($data));
       return $a['attribut'][array_slice($element['#parents'], 4, 1)[0]]['leaflet_style_mapping'];
-    }
-    else {
+    } else {
       return [];
     }
   }
@@ -281,13 +282,12 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
   public static function managedFile($element) {
 
     if (!isset($element['remove_button']['#access']) || $element['remove_button']['#access'] !== false) {
-      $element['upload']['#access']=true;
-      $element['replace_button']['#access']=true;
-    }
-    else {
+      $element['upload']['#access'] = true;
+      $element['replace_button']['#access'] = true;
+    } else {
       // $element['upload']['#access']=false;
       $element['upload']['#description'] = '';
-      $element['replace_button']['#access']=false;
+      $element['replace_button']['#access'] = false;
     }
     return $element;
   }
