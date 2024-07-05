@@ -33,11 +33,12 @@ class StyleMapping extends FormElement {
     $input_exists = FALSE;
     $config = \Drupal::config('geojsonfile_field.settings');
 
-    $delta = array_slice($element['#parents'], 4, 1)[0];
+    $delta_attrib = array_slice($element['#parents'], 4, 1)[0];
+    $delta_geojson = array_slice($element['#parents'], 1, 1)[0];
 
     // retreive properties defined in geojson file
     $geojson = NestedArray::getValue($form_state->getValues(), array_slice($element['#parents'], 0, 2));
-    if ((count($geojson['fids']) == 1) && (!isset($this->geo_properties))) {
+    if (isset($geojson['fids']) && (count($geojson['fids']) == 1) && (!isset($this->geo_properties))) {
       $props = [];
       $file = File::Load($geojson['fids'][0]);
       $cont = file_get_contents($file->getFileUri());
@@ -96,7 +97,7 @@ class StyleMapping extends FormElement {
         'callback' => [$this, 'updatePropValues'], 
         'disable-refocus' => FALSE, // Or TRUE to prevent re-focusing on the triggering element.
         'event' => 'change',
-        'wrapper' => 'properties_value_' . $delta, // This element is updated with this AJAX callback.
+        'wrapper' => 'properties_value_' . $delta_geojson . '_' . $delta_attrib, // This element is updated with this AJAX callback.
         'progress' => [
           'type' => 'throbber',
           'message' => t('Verifying entry...'),
@@ -113,7 +114,7 @@ class StyleMapping extends FormElement {
       '#maxlength' => 64,
       '#size' => 1,
       '#weight' => 2,
-      '#prefix' => '<div id="properties_value_' . $delta . '">',
+      '#prefix' => '<div id="properties_value_' . $delta_geojson . '_' . $delta_attrib . '">',
       '#suffix' => '</div>',
       '#options' => $this->geo_properties != null ?
         array_combine(($this->geo_properties)[$element['Attribute']['attribut']['#default_value']],

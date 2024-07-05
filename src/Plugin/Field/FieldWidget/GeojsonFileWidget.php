@@ -60,10 +60,10 @@ private $geo_properties = null;
 
     $num_names = $form_state->getValue([$element['#field_name'], $delta, 'mapping', '_nb_attribut']);
     if (!$num_names && isset($element['#default_value']['mappings'])) {
-      $num_names = unserialize($element['#default_value']['mappings'])['_nb_attribut'] ?? 1;
+      $num_names = unserialize($element['#default_value']['mappings'])['_nb_attribut'] ?? 0;
       $form_state->setValue([$element['#field_name'], $delta, 'mapping', '_nb_attribut'], $num_names);
     } else if (!$num_names) {
-      $num_names = 1;
+      $num_names = 0;
       $form_state->setValue([$element['#field_name'], $delta, 'mapping', '_nb_attribut'], $num_names);
     }
 
@@ -117,7 +117,7 @@ private $geo_properties = null;
       $this->geo_properties = $props_uniq;
     }
 
-    for ($i = 1; $i < $num_names; $i++) {
+    for ($i = 1; $i <= $num_names; $i++) {
       $element['mapping']['attribut'][$i] = [
         '#title' => 'Attribute ' . $i,
         '#type' => 'details',
@@ -137,7 +137,7 @@ private $geo_properties = null;
     $element['mapping']['_nb_attribut'] = [
       '#type' => 'value',
       '#description' => 'number of attributs for delta ' . $delta,
-      '#value' => $i,
+      '#value' => $i - 1, // attributes number is 1 indexed
     ];
     // save number of attributs mapping
     $form_state->setValue([$element['#field_name'], $element['#delta'], 'mapping', '_nb_attribut'], $i);
@@ -161,8 +161,10 @@ private $geo_properties = null;
     if ($num_names > 1) {
       $element['mapping']['actions']['remove_name'] = [
         '#type' => 'submit',
-        '#value' => $this->t('Remove one'),
-        '#submit' => [$class . '::removeCallback'],
+        '#value' => $this->t('Remove last'),
+        '#submit' => [[$this, 'removeLast']],
+        '#description' => 'Remove ' . $delta,
+      '#name' => 'remove_' . $delta, // #name must be defined and unique
         '#ajax' => [
           'callback' => $class . '::addmoreCallback',
           'wrapper' => 'mapping-fieldset-wrapper' . $delta,
@@ -200,7 +202,7 @@ private $geo_properties = null;
     $nb_attribut_array = $parent;
     $nb_attribut_array[] = '_nb_attribut';
 
-    $name_field = $form_state->getValue($nb_attribut_array) ?? 1;
+    $name_field = $form_state->getValue($nb_attribut_array) ?? 0;
 
     // $name_field = count($field_element['attribut']);
     $add_button = $name_field + 1;
@@ -219,14 +221,14 @@ private $geo_properties = null;
    *
    * Decrements the max counter and causes a form rebuild.
    */
-  public static function removeCallback(array &$form, FormStateInterface $form_state) {
+  public static function removeLast(array &$form, FormStateInterface $form_state) {
     $parent = array_slice($form_state->getTriggeringElement()['#parents'], 0, 3);
     $nb_attribut_array = $parent;
     $nb_attribut_array[] = '_nb_attribut';
 
-    $name_field = $form_state->getValue($nb_attribut_array) ?? 1;
+    $name_field = $form_state->getValue($nb_attribut_array) ?? 0;
 
-    if ($name_field > 1) {
+    if ($name_field > 0) {
       $remove_button = $name_field - 1;
       $form_state->setValue($nb_attribut_array, $remove_button);
     }
