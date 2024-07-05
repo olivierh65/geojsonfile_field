@@ -10,6 +10,7 @@ use GuzzleHttp\Psr7\Request as Psr7Request;
 use Symfony\Component\HttpFoundation\Request;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Security\TrustedCallbackInterface;
+use Drupal\file\Entity\File;
 
 /**
  * Provides the field widget for Symbol field.
@@ -25,6 +26,7 @@ use Drupal\Core\Security\TrustedCallbackInterface;
  */
 class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
 
+private $geo_properties = null;
 
   /**
    * {@inheritdoc}
@@ -84,7 +86,7 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
     $element['mapping'] = [
       '#title' => 'Attribute style',
       '#type' => 'details',
-      '#open' => false,
+      '#open' => ((null !== $form_state->getValue("last_added")) && $delta == $form_state->getValue("last_added")) ? true : false,
       '#prefix' => '<div id="mapping-fieldset-wrapper' . $delta . '">',
       '#suffix' => '</div>',
       // hide until a file is selected
@@ -92,8 +94,30 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
       '#weight' => 20,
     ];
 
+    if ($file_selected && (! isset($this->geo_properties ))) {
+      $props = [];
+      $file = File::Load($element['#default_value']['fids'][0]);
+      $cont = file_get_contents($file->getFileUri());
+      foreach (json_decode($cont, true)['features'] as $feature) {
+        if ($feature['type'] == "Feature") {
+          foreach ($feature['properties'] as $key => $val) {
+            $props[$key][] = $val;
+          }
+        }
+      }
 
-    for ($i = 0; $i < $num_names; $i++) {
+      foreach($props as $key => $value) {
+        // remove duplicate entries and also item contening only null
+        $ar = array_unique($props[$key]);
+        if ((count($ar) == 0) || (count($ar) == 1 && $ar[0] == null)) {
+          continue;
+        }
+        $props_uniq[$key] = $ar;
+      }
+      $this->geo_properties = $props_uniq;
+    }
+
+    for ($i = 1; $i < $num_names; $i++) {
       $element['mapping']['attribut'][$i] = [
         '#title' => 'Attribute ' . $i,
         '#type' => 'details',
@@ -182,6 +206,8 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
     $add_button = $name_field + 1;
     $form_state->setValue($nb_attribut_array, $add_button);
 
+    $form_state->setValue("last_added", $parent[1]);
+
     // Since our buildForm() method relies on the value of 'num_names' to
     // generate 'name' form elements, we have to tell the form to rebuild. If we
     // don't do this, the form builder will not call buildForm(). */
@@ -227,13 +253,11 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
   }
 
 
-  public static function mappingUnserialize($element, $input, $form_state) {
-    $a = $element;
+  public  function mappingUnserialize($element, $input, $form_state) {
     if ($input) {
       return $input;
     }
 
-    $a = $element;
     $data = array_slice($element['#parents'], 0, 2);
 
     $data[] = 'mappings';
@@ -254,8 +278,13 @@ class GeojsonFileWidget extends FileWidget implements TrustedCallbackInterface {
     $data = array_slice($element['#parents'], 0, 2);
 
     $data[] = 'styles';
-    $a = unserialize($form_state->getValue($data));
-    return $a['leaflet_style'];
+    $a = unserialize($form_state->getValue($data) ?? '');
+    if ($a) {
+      return $a['leaflet_style'];
+    }
+    else {
+      return [];
+    }
   }
 
   /**

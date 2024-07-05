@@ -50,6 +50,14 @@ class GeoJsonFile extends FileItem {
   return $def; */
   }
 
+  public function fieldSettingsForm(array $form, FormStateInterface $form_state) {
+
+    $element=parent::fieldSettingsForm($form, $form_state);
+    // Hide description field
+    $element['description_field']['#access'] = false;
+    return $element;
+  }
+
   /**
    * {@inheritdoc}
    */
