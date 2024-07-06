@@ -42,7 +42,12 @@ class StyleMapping extends FormElement {
       $props = [];
       $file = File::Load($geojson['fids'][0]);
       $cont = file_get_contents($file->getFileUri());
-      foreach (json_decode($cont, true)['features'] as $feature) {
+      $features = json_decode($cont, true);
+      if (!isset($features['features'])) {
+        // if just one feature, add it into array
+        $features['features'] = [$features];
+      }
+      foreach ($features['features'] as $feature) {
         if ($feature['type'] == "Feature") {
           foreach ($feature['properties'] as $key => $val) {
             $props[$key][] = $val;
