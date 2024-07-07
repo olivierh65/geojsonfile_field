@@ -37,8 +37,12 @@ class StyleMapping extends FormElement {
     $delta_geojson = array_slice($element['#parents'], 1, 1)[0];
 
     // retreive properties defined in geojson file
+    $geo_properties = NestedArray::getValue(
+      $form_state->getValues(),
+      array_merge(array_slice($element['#parents'], 0, 2), ['geo_properties'])
+    );
     $geojson = NestedArray::getValue($form_state->getValues(), array_slice($element['#parents'], 0, 2));
-    if (isset($geojson['fids']) && (count($geojson['fids']) == 1) && (!isset($this->geo_properties))) {
+    if (isset($geojson['fids']) && (count($geojson['fids']) == 1) && (!isset($geo_properties))) {
       $props = [];
       $file = File::Load($geojson['fids'][0]);
       $cont = file_get_contents($file->getFileUri());
@@ -63,7 +67,12 @@ class StyleMapping extends FormElement {
         }
         $props_uniq[$key] = $ar;
       }
-      $this->geo_properties = $props_uniq;
+      $geo_properties = $props_uniq;
+      NestedArray::setValue(
+        $form_state->getValues(),
+        array_merge(array_slice($element['#parents'], 0, 2), ['geo_properties']),
+        $props_uniq
+      );
     }
 
     $field_element = NestedArray::getValue($form_state->getValues(), $element['#parents'], $input_exists);
@@ -90,16 +99,16 @@ class StyleMapping extends FormElement {
       '#type' => 'select',
       '#title' => t('Attribut Name'),
       '#default_value' => (isset($item['Attribute']['attribut']) && ($item['Attribute']['attribut'] != ''))
-        ? $item['Attribute']['attribut'] : ($this->geo_properties != null ? array_keys($this->geo_properties)[0] : ''),
+        ? $item['Attribute']['attribut'] : ($geo_properties != null ? array_keys($geo_properties)[0] : ''),
       '#description' => t('Attribute name '),
-      '#options' => $this->geo_properties != null ?
-        array_combine(array_keys($this->geo_properties), array_keys($this->geo_properties)) :
+      '#options' => $geo_properties != null ?
+        array_combine(array_keys($geo_properties), array_keys($geo_properties)) :
         [],
       '#maxlength' => 64,
       '#size' => 1,
       '#weight' => 1,
       '#ajax' => [
-        'callback' => [$this, 'updatePropValues'], 
+        'callback' => [$this, 'updatePropValues'],
         'disable-refocus' => FALSE, // Or TRUE to prevent re-focusing on the triggering element.
         'event' => 'change',
         'wrapper' => 'properties_value_' . $delta_geojson . '_' . $delta_attrib, // This element is updated with this AJAX callback.
@@ -113,7 +122,7 @@ class StyleMapping extends FormElement {
       '#type' => 'select',
       '#title' => t('Attribut Value'),
       '#default_value' => (isset($item['Attribute']['value']) && ($item['Attribute']['value'] != '') &&
-      in_array($item['Attribute']['value'], ($this->geo_properties)[$element['Attribute']['attribut']['#default_value']]))
+        in_array($item['Attribute']['value'], ($geo_properties)[$element['Attribute']['attribut']['#default_value']]))
         ? $item['Attribute']['value'] :  null,
       '#description' => t('Attibute value '),
       '#maxlength' => 64,
@@ -121,9 +130,9 @@ class StyleMapping extends FormElement {
       '#weight' => 2,
       '#prefix' => '<div id="properties_value_' . $delta_geojson . '_' . $delta_attrib . '">',
       '#suffix' => '</div>',
-      '#options' => $this->geo_properties != null ?
-        array_combine(($this->geo_properties)[$element['Attribute']['attribut']['#default_value']],
-          ($this->geo_properties)[$element['Attribute']['attribut']['#default_value']]
+      '#options' => $geo_properties != null ?
+        array_combine(($geo_properties)[$element['Attribute']['attribut']['#default_value']],
+          ($geo_properties)[$element['Attribute']['attribut']['#default_value']]
         ) :
         [],
     ];
@@ -136,7 +145,7 @@ class StyleMapping extends FormElement {
       '#maxlength' => 64,
       '#size' => 12,
       '#weight' => 2,
-    ]; 
+    ];
 
     $element['Style'] = [
       '#type' => 'leaflet_style',
@@ -152,14 +161,18 @@ class StyleMapping extends FormElement {
     // Return the prepared textfield.
     $trigElement = $form_state->getTriggeringElement();
 
+    $geo_properties = NestedArray::getValue(
+      $form_state->getValues(),
+      array_merge(array_slice($trigElement['#parents'], 0, 2), ['geo_properties'])
+    );
     $elem_path = array_slice($trigElement['#array_parents'], 0, -1);
     $elem_path[] = 'value';
     $element = NestedArray::getValue($form, $elem_path);
 
     if (isset($trigElement['#value'])) {
-      $element['#options'] = array_combine($this->geo_properties[$trigElement['#value']], $this->geo_properties[$trigElement['#value']]);
-      $element['#default_value'] = ( ($trigElement['#value'] != '') &&
-      array_key_exists($element['#value'], ($this->geo_properties)[$trigElement['#default_value']]))
+      $element['#options'] = array_combine($geo_properties[$trigElement['#value']], $geo_properties[$trigElement['#value']]);
+      $element['#default_value'] = (($trigElement['#value'] != '') &&
+        array_key_exists($element['#value'], ($geo_properties)[$trigElement['#default_value']]))
         ? $element['#value'] :  null;
     } else {
       $element['#options'] = [];
@@ -172,17 +185,14 @@ class StyleMapping extends FormElement {
   }
 
   public function validateMapping(&$element, FormStateInterface $form_state, &$complete_form) {
-    $a=$element;
+    $a = $element;
     $trigElement = $form_state->getTriggeringElement();
 
     if ($trigElement["#type"] == "submit") {
       return;
-    }
-    else {
+    } else {
       // clear error when select have been updates
       $form_state->clearErrors();
     }
-    
   }
-
 }

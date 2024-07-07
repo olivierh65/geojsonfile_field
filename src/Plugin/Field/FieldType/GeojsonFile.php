@@ -17,7 +17,7 @@ use Drupal\Core\Form\FormStateInterface;
  *   description = @Translation("This field stores Geojson file and style."),
  *   category = @Translation("Reference"),
  *   default_widget = "geojsonfile_widget",
- *   default_formatter = "geojsonfile_formatter",
+ *   default_formatter = "leaflet_edit_formatter",
  *   list_class = "\Drupal\file\Plugin\Field\FieldType\FileFieldItemList",
  *   constraints = {"ReferenceAccess" = {}, "FileValidation" = {}},
  * )
