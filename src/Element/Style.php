@@ -6,14 +6,14 @@ use Drupal\Core\Render\Element\File;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Component\Utility\NestedArray;
 use Drupal\file\Element\ManagedFile;
-use Drupal\Core\Render\Element\FormElement;
+use Drupal\Core\Render\Element\FormElementBase;
 
 /**
  * Provides a time element.
  *
  * @FormElement("leaflet_style")
  */
-class Style extends FormElement {
+class Style extends FormElementBase {
 
   public function getInfo() {
 
