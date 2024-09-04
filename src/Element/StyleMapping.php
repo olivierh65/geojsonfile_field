@@ -43,9 +43,9 @@ class StyleMapping extends FormElementBase {
     );
    
     $geojson = NestedArray::getValue($form_state->getValues(), array_slice($element['#parents'], 0, 2));
-    if (isset($geojson['fids']) && (count($geojson['fids']) == 1) && (!isset($geo_properties))) {
+    if (isset($geojson['fichier']['fids']) && (isset($geojson['fichier']['fids'][0])) && (!isset($geo_properties))) {
       $props = [];
-      $file = File::Load($geojson['fids'][0]);
+      $file = File::Load($geojson['fichier']['fids'][0]);
       $cont = file_get_contents($file->getFileUri());
       $features = json_decode($cont, true);
       if (!isset($features['features'])) {

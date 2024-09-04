@@ -38,7 +38,7 @@ use Symfony\Component\Validator\ConstraintViolationListInterface;
  *   }
  * )
  */
-class GeojsonFileWidget extends WidgetBase /* FileWidget */ implements TrustedCallbackInterface {
+class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallbackInterface */ {
 
 private $geo_properties = null;
 
@@ -49,197 +49,8 @@ private $geo_properties = null;
    */
   protected $fileSystem;
 
-    /**
-   * The element info manager.
-   */
-  protected ElementInfoManagerInterface $elementInfo;
-
-  /**
-   * {@inheritdoc}
-   */
-  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, array $third_party_settings, ElementInfoManagerInterface $element_info) {
-    parent::__construct($plugin_id, $plugin_definition, $field_definition, $settings, $third_party_settings);
-    $this->elementInfo = $element_info;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
-    return new static($plugin_id, $plugin_definition, $configuration['field_definition'], $configuration['settings'], $configuration['third_party_settings'], $container->get('element_info'));
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public static function defaultSettings() {
-    return [
-      'progress_indicator' => 'throbber',
-    ] + parent::defaultSettings();
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function settingsForm(array $form, FormStateInterface $form_state) {
-    $element['progress_indicator'] = [
-      '#type' => 'radios',
-      '#title' => $this->t('Progress indicator'),
-      '#options' => [
-        'throbber' => $this->t('Throbber'),
-        'bar' => $this->t('Bar with progress meter'),
-      ],
-      '#default_value' => $this->getSetting('progress_indicator'),
-      '#description' => $this->t('The throbber display does not show the status of uploads but takes up less space. The progress bar is helpful for monitoring progress on large uploads.'),
-      '#weight' => 16,
-      '#access' => extension_loaded('uploadprogress'),
-    ];
-    return $element;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function settingsSummary() {
-    $summary = [];
-    $summary[] = $this->t('Progress indicator: @progress_indicator', ['@progress_indicator' => $this->getSetting('progress_indicator')]);
-    return $summary;
-  }
 
 
-  /**
-   * {@inheritdoc}
-   */
-  public static function trustedCallbacks() {
-    return [
-      'managedFile',
-    ];
-  }
-
-  /**
-   * Overrides \Drupal\Core\Field\WidgetBase::formMultipleElements().
-   *
-   * Special handling for draggable multiple widgets and 'add more' button.
-   */
-  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
-    $field_name = $this->fieldDefinition->getName();
-    $parents = $form['#parents'];
-
-    // Load the items for form rebuilds from the field state as they might not
-    // be in $form_state->getValues() because of validation limitations. Also,
-    // they are only passed in as $items when editing existing entities.
-    $field_state = static::getWidgetState($parents, $field_name, $form_state);
-    if (isset($field_state['items'])) {
-      $items->setValue($field_state['items']);
-    }
-
-    // Determine the number of widgets to display.
-    $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
-    switch ($cardinality) {
-      case FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED:
-        $max = count($items);
-        $is_multiple = TRUE;
-        break;
-
-      default:
-        $max = $cardinality - 1;
-        $is_multiple = ($cardinality > 1);
-        break;
-    }
-
-    $title = $this->fieldDefinition->getLabel();
-    $description = $this->getFilteredDescription();
-
-    $elements = [];
-
-    $delta = 0;
-    // Add an element for every existing item.
-    foreach ($items as $item) {
-      $element = [
-        '#title' => $title,
-        '#description' => $description,
-      ];
-      $element = $this->formSingleElement($items, $delta, $element, $form, $form_state);
-
-      if ($element) {
-        // Input field for the delta (drag-n-drop reordering).
-        if ($is_multiple) {
-          // We name the element '_weight' to avoid clashing with elements
-          // defined by widget.
-          $element['_weight'] = [
-            '#type' => 'weight',
-            '#title' => $this->t('Weight for row @number', ['@number' => $delta + 1]),
-            '#title_display' => 'invisible',
-            // Note: this 'delta' is the FAPI #type 'weight' element's property.
-            '#delta' => $max,
-            '#default_value' => $item->_weight ?: $delta,
-            '#weight' => 100,
-          ];
-        }
-
-        $elements[$delta] = $element;
-        $delta++;
-      }
-    }
-
-    $empty_single_allowed = ($cardinality == 1 && $delta == 0);
-    $empty_multiple_allowed = ($cardinality == FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED || $delta < $cardinality) && !$form_state->isProgrammed();
-
-    // Add one more empty row for new uploads except when this is a programmed
-    // multiple form as it is not necessary.
-    if ($empty_single_allowed || $empty_multiple_allowed) {
-      // Create a new empty item.
-      $items->appendItem();
-      $element = [
-        '#title' => $title,
-        '#description' => $description,
-      ];
-      $element = $this->formSingleElement($items, $delta, $element, $form, $form_state);
-      if ($element) {
-        $element['#required'] = ($element['#required'] && $delta == 0);
-        $elements[$delta] = $element;
-      }
-    }
-
-    if ($is_multiple) {
-      // The group of elements all-together need some extra functionality after
-      // building up the full list (like draggable table rows).
-      $elements['#file_upload_delta'] = $delta;
-      $elements['#type'] = 'details';
-      $elements['#open'] = TRUE;
-      $elements['#theme'] = 'file_widget_multiple';
-      $elements['#theme_wrappers'] = ['details'];
-      $elements['#process'] = [[static::class, 'processMultiple']];
-      $elements['#title'] = $title;
-
-      $elements['#description'] = $description;
-      $elements['#field_name'] = $field_name;
-      $elements['#language'] = $items->getLangcode();
-      // The field settings include defaults for the field type. However, this
-      // widget is a base class for other widgets (e.g., ImageWidget) that may
-      // act on field types without these expected settings.
-      $field_settings = $this->getFieldSettings() + ['display_field' => NULL];
-      $elements['#display_field'] = (bool) $field_settings['display_field'];
-
-      // Add some properties that will eventually be added to the file upload
-      // field. These are added here so that they may be referenced easily
-      // through a hook_form_alter().
-      $elements['#file_upload_title'] = $this->t('Add a new file');
-      $elements['#file_upload_description'] = [
-        '#theme' => 'file_upload_help',
-        '#description' => '',
-        '#upload_validators' => $elements[0]['#upload_validators'],
-        '#cardinality' => $cardinality,
-      ];
-    }
-
-    return $elements;
-  }
-
-
-  /**
-   * {@inheritdoc}
-   */
   public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
     // The formElement method returns the form for a single field widget (Used to render the form in the Admin Interface of Drupal)
     // We need to add our new field to this
@@ -258,16 +69,11 @@ private $geo_properties = null;
       'description_field' => NULL,
     ];
 
-    $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
     $defaults = [
       'fids' => [],
       'display' => (bool) $field_settings['display_default'],
       'description' => '',
     ];
-
-    // Essentially we use the managed_file type, extended with some
-    // enhancements.
-    $element_info = $this->elementInfo->getInfo('managed_file');
 
 
     // $element['#multiple'] = false;
@@ -275,30 +81,47 @@ private $geo_properties = null;
       'file_validate_extensions' => ['gpx gepjson'],
     ];
  */
-    if (isset($element['#default_value']['fids'])) {
-      $file_selected = count($element['#default_value']['fids']) > 0;
-    } else {
-      $file_selected = false;
-    }
 
-    $element['fichmieranage'] = [
+    $element['fichier'] = [
       '#type' => 'managed_file',
       '#title' => "Fichier $delta" ,
-     '#upload_location' => $items[$delta]->getUploadLocation(),
       '#upload_validators' => $items[$delta]->getUploadValidators(),
-      '#value_callback' => [static::class, 'value'],
-      '#process' => array_merge($element_info['#process'], [[static::class, 'process']]),
+      // '#process' => array_merge($element_info['#process'], [[static::class, 'process']]),
       '#progress_indicator' => $this->getSetting('progress_indicator'),
-      // Allows this field to return an array instead of a single value.
-      // '#extended' => TRUE,
-      '#entity_type' => $items->getEntity()->getEntityTypeId(),
       '#display_field' => (bool) $field_settings['display_field'],
       '#display_default' => $field_settings['display_default'],
       '#description_field' => $field_settings['description_field'],
+      '#display_field' => (bool) $field_settings['display_field'],
+      // '#theme' => 'file_link',
+      // Add some properties that will eventually be added to the file upload
+      // field. These are added here so that they may be referenced easily
+      // through a hook_form_alter().
+      '#file_upload_title' => $this->t('Add a new file'),
+
       '#cardinality' => 1,
       '#multiple' => false,
+      '#extended' => true,
     ];
 
+   /*   // Field stores FID value in a single mode, so we need to transform it for
+    // form element to recognize it correctly.
+    if (!isset($items[$delta]->fids) && isset($items[$delta]->target_id)) {
+      $items[$delta]->fids = [$items[$delta]->target_id];
+    }
+    // $element[$delta]['fichier']['#default_value'] = $items[$delta]->getValue() + $defaults;
+    $element['fichier']['#default_value']['fids'] =  null;
+
+    $default_fids = $element['fichier']['#extended'] ? $element['fichier']['#default_value']['fids'] : $element['fichier']['#default_value']; */
+    
+    if (isset($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0][0]['fichier'])) {
+    // if (isset($element[$delta]['fichier']['#default_value']['fids'])) {
+      // $file_selected = count($element[$delta]['fichier']['#default_value']['fids']) > 0;
+      $file_selected = $form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0][0]['fichier']['fids'][0] > 0;
+    } else {
+      $file_selected = false;
+    }
+    
+    
     $element['description_field'] = [
       '#type' => 'textfield',
       '#title' => t('DEscription'),
@@ -339,10 +162,13 @@ private $geo_properties = null;
     // save number of attributs mapping
     $form_state->setValue(['_nb_attribut'], $delta + 1);
 
+    $element['#cardinality'] = 5;
+    $element['#multiple'] = true;
 
+   
     if ($file_selected && (! isset($this->geo_properties ))) {
       $props = [];
-      $file = File::Load($element['#default_value']['fids'][0]);
+      $file = File::Load($element['fichier']['#default_value']['fids'][0]);
       $cont = file_get_contents($file->getFileUri());
       foreach (json_decode($cont, true)['features'] as $feature) {
         if ($feature['type'] == "Feature") {
@@ -364,8 +190,8 @@ private $geo_properties = null;
     }
 
     $num_names = $form_state->getValue('_nb_attribut');
-    if (!$num_names && isset($element['#default_value']['mappings'])) {
-      $num_names = count($element['#default_value']['mappings']) ?? 1;
+    if (!$num_names && isset($element['fichier']['mappings'])) {
+      $num_names = count($element['fichier']['mappings']) ?? 1;
       $form_state->setValue('_nb_attribut', $num_names);
     } else if (!$num_names) {
       $num_names = 1;
@@ -486,21 +312,6 @@ private $geo_properties = null;
     $form_state->setRebuild();
   }
 
-  public function massageFormValues(array $values, array $form, FormStateInterface $form_state) {
-
-    $v = parent::massageFormValues($values, $form, $form_state);
-
-    foreach ($v as $key => $value) {
-      if (isset($value['style'])) {
-        $v[$key]['styles'] = serialize($value['style']);
-      }
-      if (isset($value['mapping'])) {
-        $v[$key]['mappings'] = serialize($value['mapping']);
-      }
-    }
-
-    return $v;
-  }
 
 
   public  function mappingUnserialize($element, $input, $form_state) {
@@ -537,71 +348,255 @@ private $geo_properties = null;
     }
   }
 
+  
+  /**
+   * The element info manager.
+   */
+  protected ElementInfoManagerInterface $elementInfo;
+
+
+ 
+
   /**
    * {@inheritdoc}
    */
-  public static function process($element, FormStateInterface $form_state, $form) {
-
-    $element['#pre_render'][] = [static::class, 'managedFile'];
-
-    $element['replace_button'] = $element['upload_button'];
-    $element['replace_button']['#value'] = t('Replace');
-    $element['replace_button']['#weight'] = -5;
-    $element['replace_button']['#empty_option'] = t('Select Replace File');
-    unset($element['replace_button']['#attributes']);
-    $element['replace_button']['#attributes']['title'] = 'Select a file, then click Replace button';
-    $element['replace_button']['#attributes']['class'][] = 'button--extrasmall';
-    // $element['replace_button']['#ajax']['event'] = 'fileUpload';
-
-    return $element;
+  public static function defaultSettings() {
+    return [
+      'progress_indicator' => 'throbber',
+    ] + parent::defaultSettings();
   }
 
-  public static function managedFile($element) {
-
-    if (!isset($element['remove_button']['#access']) || $element['remove_button']['#access'] !== false) {
-      $element['upload']['#access'] = true;
-      $element['replace_button']['#access'] = true;
-    } else {
-      // $element['upload']['#access']=false;
-      $element['upload']['#description'] = '';
-      $element['replace_button']['#access'] = false;
-    }
-    return $element;
-  }
-
-    /**
+  /**
    * {@inheritdoc}
    */
-  public function save(array $form, FormStateInterface $form_state) {
-    /** @var \Drupal\file\FileInterface $file */
-    $file = $this->entity;
-    $file_uri = $file->getFileUri();
+  public function settingsForm(array $form, FormStateInterface $form_state) {
+    $element['progress_indicator'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('Progress indicator'),
+      '#options' => [
+        'throbber' => $this->t('Throbber'),
+        'bar' => $this->t('Bar with progress meter'),
+      ],
+      '#default_value' => $this->getSetting('progress_indicator'),
+      '#description' => $this->t('The throbber display does not show the status of uploads but takes up less space. The progress bar is helpful for monitoring progress on large uploads.'),
+      '#weight' => 16,
+      '#access' => extension_loaded('uploadprogress'),
+    ];
+    return $element;
+  }
 
-    /** @var \Drupal\file\FileInterface $replacement */
-    $replacement = file_save_upload('replacement', $form['replacement']['replacement']['#upload_validators'], FALSE, 0);
-    if (!$replacement) {
-      $this->messenger()->addError($this->t('The replacement file was not saved'));
-      return;
+  /**
+   * {@inheritdoc}
+   */
+  public function settingsSummary() {
+    $summary = [];
+    $summary[] = $this->t('Progress indicator: @progress_indicator', ['@progress_indicator' => $this->getSetting('progress_indicator')]);
+    return $summary;
+  }
+
+
+  public function __massageFormValues(array $values, array $form, FormStateInterface $form_state) {
+
+    $v = parent::massageFormValues($values, $form, $form_state);
+
+    foreach ($v as $key => $value) {
+      if (isset($value['style'])) {
+        $v[$key]['styles'] = serialize($value['style']);
+      }
+      if (isset($value['mapping'])) {
+        $v[$key]['mappings'] = serialize($value['mapping']);
+      }
     }
 
-    if (!$this->fileSystem->copy($replacement->getFileUri(), $file_uri, FileSystemInterface::EXISTS_REPLACE)) {
-      $this->messenger()->addError($this->t('The file could not be replaced'));
-      return;
+    return $v;
+  }
+
+
+  /**
+   * {@inheritdoc}
+   */
+  public function massageFormValues(array $values, array $form, FormStateInterface $form_state) {
+    // Since file upload widget now supports uploads of more than one file at a
+    // time it always returns an array of fids. We have to translate this to a
+    // single fid, as field expects single value.
+    $new_values = $this->__massageFormValues($values, $form, $form_state);
+    foreach ($values as &$value) {
+      foreach ($value['fids'] as $fid) {
+        $new_value = $value;
+        $new_value['target_id'] = $fid;
+        unset($new_value['fids']);
+        $new_values[] = $new_value;
+      }
     }
 
-    // Recalculate file size and change date.
-    $return = $file->save();
+    return $new_values;
+  }
 
-    $this->messenger()->addStatus($this->t('The file was replaced.'));
-    $this->moduleHandler->invokeAll('file_replace', [$file]);
+  /**
+   * {@inheritdoc}
+   */
+  public function extractFormValues(FieldItemListInterface $items, array $form, FormStateInterface $form_state) {
+    parent::extractFormValues($items, $form, $form_state);
 
-    // Clean up the temporary file.
-    $replacement->delete();
+    // Update reference to 'items' stored during upload to take into account
+    // changes to values like 'alt' etc.
+    // @see \Drupal\file\Plugin\Field\FieldWidget\FileWidget::submit()
+    $field_name = $this->fieldDefinition->getName();
+    $field_state = static::getWidgetState($form['#parents'], $field_name, $form_state);
+    $field_state['items'] = $items->getValue();
+    static::setWidgetState($form['#parents'], $field_name, $form_state, $field_state);
+  }
+
+  /**
+   * Form API callback. Retrieves the value for the file_generic field element.
+   *
+   * This method is assigned as a #value_callback in formElement() method.
+   */
+  public static function value($element, $input, FormStateInterface $form_state) {
+    if ($input) {
+      if (empty($input['display'])) {
+        // Updates the display field with the default value because
+        // #display_field is invisible.
+        if (empty($input['fids'])) {
+          $input['display'] = $element['#display_default'];
+        }
+        // Checkboxes lose their value when empty.
+        // If the display field is present, make sure its unchecked value is
+        // saved.
+        else {
+          $input['display'] = $element['#display_field'] ? 0 : 1;
+        }
+      }
+    }
+
+    // We depend on the managed file element to handle uploads.
+    $return = ManagedFile::valueCallback($element, $input, $form_state);
+
+    // Ensure that all the required properties are returned even if empty.
+    $return += [
+      'fids' => [],
+      'display' => 1,
+      'description' => '',
+    ];
 
     return $return;
   }
 
-/**
+  /**
+   * Validates the number of uploaded files.
+   *
+   * This validator is used only when cardinality not set to 1 or unlimited.
+   */
+  public static function validateMultipleCount($element, FormStateInterface $form_state, $form) {
+    $values = NestedArray::getValue($form_state->getValues(), $element['#parents']);
+
+    $array_parents = $element['#array_parents'];
+    array_pop($array_parents);
+    $previously_uploaded_count = count(Element::children(NestedArray::getValue($form, $array_parents))) - 1;
+
+    $field_storage_definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions($element['#entity_type']);
+    $field_storage = $field_storage_definitions[$element['#field_name']];
+    $newly_uploaded_count = count($values['fids']);
+    $total_uploaded_count = $newly_uploaded_count + $previously_uploaded_count;
+    if ($total_uploaded_count > $field_storage->getCardinality()) {
+      $keep = $newly_uploaded_count - $total_uploaded_count + $field_storage->getCardinality();
+      $removed_files = array_slice($values['fids'], $keep);
+      $removed_names = [];
+      foreach ($removed_files as $fid) {
+        $file = File::load($fid);
+        $removed_names[] = $file->getFilename();
+      }
+      $args = [
+        '%field' => $field_storage->getName(),
+        '@max' => $field_storage->getCardinality(),
+        '@count' => $total_uploaded_count,
+        '%list' => implode(', ', $removed_names),
+      ];
+      $message = new TranslatableMarkup('Field %field can only hold @max values but there were @count uploaded. The following files have been omitted as a result: %list.', $args);
+      \Drupal::messenger()->addWarning($message);
+      $values['fids'] = array_slice($values['fids'], 0, $keep);
+      NestedArray::setValue($form_state->getValues(), $element['#parents'], $values);
+    }
+  }
+
+  /**
+   * Form API callback: Processes a file_generic field element.
+   *
+   * Expands the file_generic type to include the description and display
+   * fields.
+   *
+   * This method is assigned as a #process callback in formElement() method.
+   */
+  public static function process($element, FormStateInterface $form_state, $form) {
+    $item = $element['#value'];
+    $item['fids'] = $element['fids']['#value'];
+
+    // Add the display field if enabled.
+    if ($element['#display_field']) {
+      $element['display'] = [
+        '#type' => empty($item['fids']) ? 'hidden' : 'checkbox',
+        '#title' => new TranslatableMarkup('Include file in display'),
+        '#attributes' => ['class' => ['file-display']],
+      ];
+      if (isset($item['display'])) {
+        $element['display']['#value'] = $item['display'] ? '1' : '';
+      }
+      else {
+        $element['display']['#value'] = $element['#display_default'];
+      }
+    }
+    else {
+      $element['display'] = [
+        '#type' => 'hidden',
+        '#value' => '1',
+      ];
+    }
+
+    // Add the description field if enabled.
+    if ($element['#description_field'] && $item['fids']) {
+      $config = \Drupal::config('file.settings');
+      $element['description'] = [
+        '#type' => $config->get('description.type'),
+        '#title' => new TranslatableMarkup('Description'),
+        '#value' => $item['description'] ?? '',
+        '#maxlength' => $config->get('description.length'),
+        '#description' => new TranslatableMarkup('The description may be used as the label of the link to the file.'),
+      ];
+    }
+
+    // Adjust the Ajax settings so that on upload and remove of any individual
+    // file, the entire group of file fields is updated together.
+    if ($element['#cardinality'] != 1) {
+      $parents = array_slice($element['#array_parents'], 0, -1);
+      $new_options = [
+        'query' => [
+          'element_parents' => implode('/', $parents),
+        ],
+      ];
+      $field_element = NestedArray::getValue($form, $parents);
+      $new_wrapper = $field_element['#id'] . '-ajax-wrapper';
+      foreach (Element::children($element) as $key) {
+        if (isset($element[$key]['#ajax'])) {
+          $element[$key]['#ajax']['options'] = $new_options;
+          $element[$key]['#ajax']['wrapper'] = $new_wrapper;
+        }
+      }
+      unset($element['#prefix'], $element['#suffix']);
+    }
+
+    // Add another submit handler to the upload and remove buttons, to implement
+    // functionality needed by the field widget. This submit handler, along with
+    // the rebuild logic in file_field_widget_form() requires the entire field,
+    // not just the individual item, to be valid.
+    foreach (['upload_button', 'remove_button'] as $key) {
+      $element[$key]['#submit'][] = [static::class, 'submit'];
+      $element[$key]['#limit_validation_errors'] = [array_slice($element['#parents'], 0, -1)];
+    }
+
+    return $element;
+  }
+
+  /**
    * Form API callback: Processes a group of file_generic field elements.
    *
    * Adds the weight field to each row so it can be ordered and adds a new Ajax
@@ -682,43 +677,6 @@ private $geo_properties = null;
   }
 
   /**
-   * Validates the number of uploaded files.
-   *
-   * This validator is used only when cardinality not set to 1 or unlimited.
-   */
-  public static function validateMultipleCount($element, FormStateInterface $form_state, $form) {
-    $values = NestedArray::getValue($form_state->getValues(), $element['#parents']);
-
-    $array_parents = $element['#array_parents'];
-    array_pop($array_parents);
-    $previously_uploaded_count = count(Element::children(NestedArray::getValue($form, $array_parents))) - 1;
-
-    $field_storage_definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions($element['#entity_type']);
-    $field_storage = $field_storage_definitions[$element['#field_name']];
-    $newly_uploaded_count = count($values['fids']);
-    $total_uploaded_count = $newly_uploaded_count + $previously_uploaded_count;
-    if ($total_uploaded_count > $field_storage->getCardinality()) {
-      $keep = $newly_uploaded_count - $total_uploaded_count + $field_storage->getCardinality();
-      $removed_files = array_slice($values['fids'], $keep);
-      $removed_names = [];
-      foreach ($removed_files as $fid) {
-        $file = File::load($fid);
-        $removed_names[] = $file->getFilename();
-      }
-      $args = [
-        '%field' => $field_storage->getName(),
-        '@max' => $field_storage->getCardinality(),
-        '@count' => $total_uploaded_count,
-        '%list' => implode(', ', $removed_names),
-      ];
-      $message = new TranslatableMarkup('Field %field can only hold @max values but there were @count uploaded. The following files have been omitted as a result: %list.', $args);
-      \Drupal::messenger()->addWarning($message);
-      $values['fids'] = array_slice($values['fids'], 0, $keep);
-      NestedArray::setValue($form_state->getValues(), $element['#parents'], $values);
-    }
-  }
-
-  /**
    * Form submission handler for upload/remove button of formElement().
    *
    * This runs in addition to and after file_managed_file_submit().
@@ -775,39 +733,184 @@ private $geo_properties = null;
     static::setWidgetState($parents, $field_name, $form_state, $field_state);
   }
 
+  /**
+   * {@inheritdoc}
+   */
+  public function flagErrors(FieldItemListInterface $items, ConstraintViolationListInterface $violations, array $form, FormStateInterface $form_state) {
+    // Never flag validation errors for the remove button.
+    $clicked_button = end($form_state->getTriggeringElement()['#parents']);
+    if ($clicked_button !== 'remove_button') {
+      parent::flagErrors($items, $violations, $form, $form_state);
+    }
+  }
 
     /**
-   * Form API callback. Retrieves the value for the file_generic field element.
+   * Special handling to create form elements for multiple values.
    *
-   * This method is assigned as a #value_callback in formElement() method.
+   * Handles generic features for multiple fields:
+   * - number of widgets
+   * - AHAH-'add more' button
+   * - table display and drag-n-drop value reordering
    */
-  public static function value($element, $input, FormStateInterface $form_state) {
-    if ($input) {
-      if (empty($input['display'])) {
-        // Updates the display field with the default value because
-        // #display_field is invisible.
-        if (empty($input['fids'])) {
-          $input['display'] = $element['#display_default'];
+  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
+    $field_name = $this->fieldDefinition->getName();
+    $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
+    $is_multiple = $this->fieldDefinition->getFieldStorageDefinition()->isMultiple();
+    $is_unlimited_not_programmed = FALSE;
+    $parents = $form['#parents'];
+
+    // Determine the number of widgets to display.
+    switch ($cardinality) {
+      case FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED:
+        $field_state = static::getWidgetState($parents, $field_name, $form_state);
+        $max = $field_state['items_count'];
+        $is_unlimited_not_programmed = !$form_state->isProgrammed();
+        break;
+
+      default:
+        $max = $cardinality - 1;
+        break;
+    }
+
+    $title = $this->fieldDefinition->getLabel();
+    $description = $this->getFilteredDescription();
+    $id_prefix = implode('-', array_merge($parents, [$field_name]));
+    $wrapper_id = Html::getUniqueId($id_prefix . '-add-more-wrapper');
+
+    $elements = [];
+
+    for ($delta = 0; $delta <= $max; $delta++) {
+      // Add a new empty item if it doesn't exist yet at this delta.
+      if (!isset($items[$delta])) {
+        $items->appendItem();
+      }
+
+      // For multiple fields, title and description are handled by the wrapping
+      // table.
+      if ($is_multiple) {
+        $element = [
+          '#title' => $this->t('@title (value @number)', ['@title' => $title, '@number' => $delta + 1]),
+          '#title_display' => 'invisible',
+          '#description' => '',
+        ];
+      }
+      else {
+        $element = [
+          '#title' => $title,
+          '#title_display' => 'before',
+          '#description' => $description,
+        ];
+      }
+
+      $element = $this->formSingleElement($items, $delta, $element, $form, $form_state);
+
+      if ($element) {
+        // Input field for the delta (drag-n-drop reordering).
+        if ($is_multiple) {
+          // We name the element '_weight' to avoid clashing with elements
+          // defined by widget.
+          $element['_weight'] = [
+            '#type' => 'weight',
+            '#title' => $this->t('Weight for row @number', ['@number' => $delta + 1]),
+            '#title_display' => 'invisible',
+            // Note: this 'delta' is the FAPI #type 'weight' element's property.
+            '#delta' => $max,
+            '#default_value' => $items[$delta]->_weight ?: $delta,
+            '#weight' => 100,
+          ];
+
+          // Add 'remove' button, if not working with a programmed form.
+          if ($is_unlimited_not_programmed) {
+            $remove_button = [
+              '#delta' => $delta,
+              '#name' => str_replace('-', '_', $id_prefix) . "_{$delta}_remove_button",
+              '#type' => 'submit',
+              '#value' => $this->t('Remove'),
+              '#validate' => [],
+              '#submit' => [[static::class, 'deleteSubmit']],
+              '#limit_validation_errors' => [],
+              '#ajax' => [
+                'callback' => [static::class, 'deleteAjax'],
+                'wrapper' => $wrapper_id,
+                'effect' => 'fade',
+              ],
+            ];
+
+            $element['_actions'] = [
+              'delete' => $remove_button,
+              '#weight' => 101,
+            ];
+          }
         }
-        // Checkboxes lose their value when empty.
-        // If the display field is present, make sure its unchecked value is
-        // saved.
-        else {
-          $input['display'] = $element['#display_field'] ? 0 : 1;
-        }
+
+        $elements = $element;
       }
     }
 
-    // We depend on the managed file element to handle uploads.
-    $return = ManagedFile::valueCallback($element, $input, $form_state);
+    if ($elements) {
+      $elements += [
+        '#theme' => 'field_multiple_value_form',
+        '#field_name' => $field_name,
+        '#cardinality' => $cardinality,
+        '#cardinality_multiple' => $is_multiple,
+        '#required' => $this->fieldDefinition->isRequired(),
+        '#title' => $title,
+        '#description' => $description,
+        '#max_delta' => $max,
+      ];
 
-    // Ensure that all the required properties are returned even if empty.
-    $return += [
-      'fids' => [],
-      'display' => 1,
-      'description' => '',
+      // Add 'add more' button, if not working with a programmed form.
+      if ($is_unlimited_not_programmed) {
+        $elements['#prefix'] = '<div id="' . $wrapper_id . '">';
+        $elements['#suffix'] = '</div>';
+
+        $elements['add_more'] = [
+          '#type' => 'submit',
+          '#name' => strtr($id_prefix, '-', '_') . '_add_more',
+          '#value' => t('Add another item'),
+          '#attributes' => ['class' => ['field-add-more-submit']],
+          '#limit_validation_errors' => [],
+          '#submit' => [[static::class, 'addMoreSubmit']],
+          '#ajax' => [
+            'callback' => [static::class, 'addMoreAjax'],
+            'wrapper' => $wrapper_id,
+            'effect' => 'fade',
+          ],
+        ];
+      }
+    }
+
+    return $elements;
+  }
+
+      /**
+   * Generates the form element for a single copy of the widget.
+   */
+  protected function formSingleElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
+    $element += [
+      '#field_parents' => $form['#parents'],
+      // Only the first widget should be required.
+      '#required' => $delta == 0 && $this->fieldDefinition->isRequired(),
+      '#delta' => $delta,
+      '#weight' => $delta,
     ];
 
-    return $return;
+    $element = $this->formElement($items, $delta, $element, $form, $form_state);
+
+    if ($element) {
+      // Allow modules to alter the field widget form element.
+      $context = [
+        'form' => $form,
+        'widget' => $this,
+        'items' => $items,
+        'delta' => $delta,
+        'default' => $this->isDefaultValueWidget($form_state),
+      ];
+      \Drupal::moduleHandler()->alter(['field_widget_single_element_form', 'field_widget_single_element_' . $this->getPluginId() . '_form'], $element, $form_state, $context);
+    }
+
+    return $element;
   }
+
+
 }
