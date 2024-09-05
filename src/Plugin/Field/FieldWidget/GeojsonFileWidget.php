@@ -83,6 +83,7 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
     $element['fichier']['description_field'] = [
       '#type' => 'textfield',
       '#title' => t('Description'),
+      '##default_value' => $items[$delta]->fichier,
     ];
 
     $element['fichier']['style'] = [
@@ -122,6 +123,7 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
 
     $element['#cardinality'] = 5;
     $element['#multiple'] = true;
+    $element['#tree'] = true;
 
 
     if ($file_selected && (! isset($this->geo_properties))) {
@@ -152,7 +154,7 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
       $num_names = count($element['fichier']['mappings']) ?? 0;
       $form_state->setValue('_nb_attribut', $num_names);
     } else if (!$num_names) {
-      $num_names = 1;
+      $num_names = 0;
       $form_state->setValue('_nb_attribut', $num_names);
     }
 
@@ -181,7 +183,7 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
       $element['fichier']['mapping']['attribut'][$i]['actions']['remove_name'] = [
         '#type' => 'submit',
         '#value' => $this->t('Remove last'),
-        '#submit' => [$this, 'removeLast'],
+        '#submit' => [static::class, 'removeLast'],
         '#description' => 'Remove ' . $delta,
         '#name' => 'remove_' . $delta, // #name must be defined and unique
         '#ajax' => [
@@ -195,11 +197,11 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
     $element['fichier']['mapping']['actions'] = [
       '#type' => 'actions',
     ];
-    $class = get_class($this);
+
     $element['fichier']['mapping']['actions']['add_name'] = [
       '#type' => 'submit',
       '#value' => $this->t('Add one more'),
-      '#submit' => [$this, 'addOne'] ,
+      '#submit' => [ [static::class, 'addOne'] ],
       '#description' => 'Add ' . $delta,
       '#name' => 'add_' . $delta, // #name must be defined and unique
       '#ajax' => [
@@ -346,13 +348,14 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
     // Since file upload widget now supports uploads of more than one file at a
     // time it always returns an array of fids. We have to translate this to a
     // single fid, as field expects single value.
-    $new_values = $this->__massageFormValues($values, $form, $form_state);
-    foreach ($values as &$value) {
+
+    // $new_values = $this->__massageFormValues($values, $form, $form_state);
+    $new_values = $values;
+    foreach ($new_values as $k1 => &$value) {
       foreach ($value['fichier'] as $key => $fid) {
-        $new_value = $value;
-        $new_value['fichier']['target_id'] = $fid;
-        unset($new_value['fichier'][$key]);
-        $new_values[] = $new_value;
+        $value['fichier']['#required'] = true;
+        $value['fichier']['target_id'] = $fid;
+        unset($value['fichier'][$key]);
       }
     }
 
@@ -362,7 +365,7 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
   /**
    * {@inheritdoc}
    */
-  public function extractFormValues(FieldItemListInterface $items, array $form, FormStateInterface $form_state) {
+  public function ___extractFormValues(FieldItemListInterface $items, array $form, FormStateInterface $form_state) {
     parent::extractFormValues($items, $form, $form_state);
 
     // Update reference to 'items' stored during upload to take into account
@@ -498,7 +501,7 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
    *   A description of the file suitable for use in the administrative
    *   interface.
    */
-  protected static function getDescriptionFromElement($element) {
+  protected static function ___getDescriptionFromElement($element) {
     // Use the actual file description, if it's available.
     if (!empty($element['#default_value']['description'])) {
       return $element['#default_value']['description'];
@@ -528,7 +531,7 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
    *
    * Special handling for draggable multiple widgets and 'add more' button.
    */
-  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
+  protected function ___formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
     $field_name = $this->fieldDefinition->getName();
     $parents = $form['#parents'];
 
