@@ -12,6 +12,7 @@ use Drupal\Core\Field\FieldItemListInterface;
  *   id = "geojsonfile_formatter",
  *   label = @Translation("Geojson Formatter"),
  *   field_types = {
+ *     "file",
  *     "geojsonfile_field"
  *   },
  * )

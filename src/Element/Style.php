@@ -58,7 +58,7 @@ class Style extends FormElementBase {
     $element['weight'] = [
       '#type' => 'number',
       '#title' => t('<em>Weight</em> field'),
-      '#default_value' => isset($item['weight']) ? $item['weight'] : 2,
+      '#default_value' => isset($item['weight']) ? $item['weight'] : 6,
       '#description' => t('Stroke width in pixels.'),
       '#min' => 1,
       '#step' => 1,

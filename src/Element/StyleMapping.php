@@ -14,21 +14,16 @@ use Drupal\file\Entity\File;
  */
 class StyleMapping extends FormElementBase {
 
-  private $geo_properties = null;
-
   public function getInfo() {
     return [
       '#input' => TRUE,
       '#process' => [
         [$this, 'processStyleMapping'],
       ],
-      '#element_validate' => [
-        [$this, 'validateMapping'],
-      ],
     ];
   }
 
-  public  function processStyleMapping(&$element, FormStateInterface $form_state, &$complete_form) {
+  public static function processStyleMapping(&$element, FormStateInterface $form_state, &$complete_form) {
 
     $input_exists = FALSE;
     $config = \Drupal::config('geojsonfile_field.settings');
@@ -190,15 +185,4 @@ class StyleMapping extends FormElementBase {
     return $element;
   }
 
-  public function validateMapping(&$element, FormStateInterface $form_state, &$complete_form) {
-    $a = $element;
-    $trigElement = $form_state->getTriggeringElement();
-
-    if ($trigElement["#type"] == "submit") {
-      return;
-    } else {
-      // clear error when select have been updates
-      $form_state->clearErrors();
-    }
-  }
 }

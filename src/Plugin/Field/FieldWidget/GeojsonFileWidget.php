@@ -24,6 +24,8 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\Field\Attribute\FieldWidget;
 use Drupal\file\Element\ManagedFile;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
+use Drupal\Core\Field\WidgetInterface;
+use Drupal\Component\Utility\Environment;
 
 
 /**
@@ -38,53 +40,65 @@ use Symfony\Component\Validator\ConstraintViolationListInterface;
  *   }
  * )
  */
-class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallbackInterface */ {
-
-  private $geo_properties = null;
+class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
 
   /**
    * The file system service.
    *
    * @var \Drupal\Core\File\FileSystemInterface
    */
-  protected $fileSystem;
+  static protected $fieldName = null;
 
   public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
 
-    $element['fichier'] = [
+    if (static::$fieldName == null) {
+      static::$fieldName=$this->fieldDefinition->getName();
+    }
+    
+    $element = [];
+    $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
+    $element['#multiple'] = true;
+    $element['#tree'] = true;
+    $element['#max_delta'] = 0;
+
+
+    $element['data'] = [
+        '#title' => 'Data ' . $delta,
+        '#type' => 'details',
+        '#open' => true,
+        '#weight' => 10,
+      ];
+    $element['data']['fichier'] = [
       '#type' => 'managed_file',
       '#title' => "Fichier $delta",
-      '#upload_validators' => $items[$delta]->getUploadValidators(),
-      /* // '#process' => array_merge($element_info['#process'], [[static::class, 'process']]),
-      '#progress_indicator' => $this->getSetting('progress_indicator'),
-      '#display_field' => (bool) $field_settings['display_field'],
-      '#display_default' => $field_settings['display_default'],
-      '#description_field' => $field_settings['description_field'],
-      '#display_field' => (bool) $field_settings['display_field'],
-      '#theme' => 'geojsonfile-widget-multiple',
-      // Add some properties that will eventually be added to the file upload
-      // field. These are added here so that they may be referenced easily
-      // through a hook_form_alter().
-      '#file_upload_title' => $this->t('Add a new file'),
- */
-      // '#cardinality' => 1,
+      '#upload_validators' =>  [
+        'file_validate_extensions' => ['geojson'],
+        'file_validate_size' => [Environment::getUploadMaxSize()],
+      ],
+      '#default_value' => [
+        'fids' => $items[$delta]->get('target_id')->getCastedValue() ?? 0
+      ],
+      '#fids' => 0,
       '#multiple' => false,
-      // '#extended' => true,
     ];
 
+    $element['data']['description'] = [
+      '#type' => 'textfield',
+      '#title' => t('Description'),
+      '#default_value' => $items[$delta]->fichier,
+      '#placeholder' => 'Description de la trace',
+      '#attributes' => [
+        'id' => 'data_description_' . $delta,
+      ],
+      // '#access' => null !== $form_state->getValue(['field_data', $delta, 'data', 'fichier']) ? true : false,
+    ];
 
     if (isset($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'])) {
       $file_selected = $form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0] > 0;
     } else {
       $file_selected = false;
     }
-
-
-    $element['fichier']['description_field'] = [
-      '#type' => 'textfield',
-      '#title' => t('Description'),
-      '##default_value' => $items[$delta]->fichier,
-    ];
+   
 
     $element['fichier']['style'] = [
       '#title' => 'Global style',
@@ -121,9 +135,6 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
     // save number of attributs mapping
     $form_state->setValue(['_nb_attribut'], $element['fichier']['_nb_attribut']['#value']);
 
-    $element['#cardinality'] = 5;
-    $element['#multiple'] = true;
-    $element['#tree'] = true;
 
 
     if ($file_selected && (! isset($this->geo_properties))) {
@@ -321,8 +332,65 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
   public static function defaultSettings() {
     return [
       'progress_indicator' => 'throbber',
+      'file_directory' => '',
+      'max_filesize' => '10MB',
     ] + parent::defaultSettings();
   }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function ___fieldSettingsForm(array $form, FormStateInterface $form_state) {
+    $element = [];
+    $settings = $this->getSettings();
+
+    $element['file_directory'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('File directory'),
+      '#default_value' => $settings['file_directory'],
+      '#description' => $this->t('Optional subdirectory within the upload destination where files will be stored. Do not include preceding or trailing slashes.'),
+      '#element_validate' => [[static::class, 'validateDirectory']],
+      '#weight' => 3,
+    ];
+
+    // Make the extension list a little more human-friendly by comma-separation.
+    $extensions = str_replace(' ', ', ', $settings['file_extensions']);
+    $element['file_extensions'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Allowed file extensions'),
+      '#default_value' => $extensions,
+      '#description' => $this->t("Separate extensions with a comma or space. Each extension can contain alphanumeric characters, '.', and '_', and should start and end with an alphanumeric character."),
+      '#element_validate' => [[static::class, 'validateExtensions']],
+      '#weight' => 1,
+      '#maxlength' => 256,
+      // By making this field required, we prevent a potential security issue
+      // that would allow files of any type to be uploaded.
+      '#required' => TRUE,
+    ];
+
+    $element['max_filesize'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Maximum upload size'),
+      '#default_value' => $settings['max_filesize'],
+      '#description' => $this->t('Enter a value like "512" (bytes), "80 KB" (kilobytes) or "50 MB" (megabytes) in order to restrict the allowed file size. If left empty the file sizes could be limited only by PHP\'s maximum post and file upload sizes (current limit <strong>%limit</strong>).', [
+        '%limit' => ByteSizeMarkup::create(Environment::getUploadMaxSize()),
+      ]),
+      '#size' => 10,
+      '#element_validate' => [[static::class, 'validateMaxFilesize']],
+      '#weight' => 5,
+    ];
+
+    $element['description_field'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Enable <em>Description</em> field'),
+      '#default_value' => $settings['description_field'] ?? '',
+      '#description' => $this->t('The description field allows users to enter a description about the uploaded file.'),
+      '#weight' => 11,
+    ];
+
+    return $element;
+  }
+
 
   public function __massageFormValues(array $values, array $form, FormStateInterface $form_state) {
 
@@ -531,119 +599,13 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget implements TrustedCallb
    *
    * Special handling for draggable multiple widgets and 'add more' button.
    */
-  protected function ___formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
-    $field_name = $this->fieldDefinition->getName();
-    $parents = $form['#parents'];
-
-    // Load the items for form rebuilds from the field state as they might not
-    // be in $form_state->getValues() because of validation limitations. Also,
-    // they are only passed in as $items when editing existing entities.
-    $field_state = static::getWidgetState($parents, $field_name, $form_state);
-    if (isset($field_state['items'])) {
-      $items->setValue($field_state['items']);
-    }
-
-    // Determine the number of widgets to display.
-    $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
-    switch ($cardinality) {
-      case FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED:
-        $max = count($items);
-        $is_multiple = TRUE;
-        break;
-
-      default:
-        $max = $cardinality - 1;
-        $is_multiple = ($cardinality > 1);
-        break;
-    }
-
-    $title = $this->fieldDefinition->getLabel();
-    $description = $this->getFilteredDescription();
-
-    $elements = [];
-
-    $delta = 0;
-    // Add an element for every existing item.
-    foreach ($items as $item) {
-      $element = [
-        '#title' => $title,
-        '#description' => $description,
-      ];
-      $element = $this->formSingleElement($items, $delta, $element, $form, $form_state);
-
-      if ($element) {
-        // Input field for the delta (drag-n-drop reordering).
-        if ($is_multiple) {
-          // We name the element '_weight' to avoid clashing with elements
-          // defined by widget.
-          $element['_weight'] = [
-            '#type' => 'weight',
-            '#title' => $this->t('Weight for row @number', ['@number' => $delta + 1]),
-            '#title_display' => 'invisible',
-            // Note: this 'delta' is the FAPI #type 'weight' element's property.
-            '#delta' => $max,
-            '#default_value' => $item->_weight ?: $delta,
-            '#weight' => 100,
-          ];
-        }
-
-        $elements[$delta] = $element;
-        $delta++;
-      }
-    }
-
-    $empty_single_allowed = ($cardinality == 1 && $delta == 0);
-    $empty_multiple_allowed = ($cardinality == FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED || $delta < $cardinality) && !$form_state->isProgrammed();
-
-    // Add one more empty row for new uploads except when this is a programmed
-    // multiple form as it is not necessary.
-    if ($empty_single_allowed || $empty_multiple_allowed) {
-      // Create a new empty item.
-      $items->appendItem();
-      $element = [
-        '#title' => $title,
-        '#description' => $description,
-      ];
-      $element = $this->formSingleElement($items, $delta, $element, $form, $form_state);
-      if ($element) {
-        $element['#required'] = ($element['#required'] && $delta == 0);
-        $elements[$delta] = $element;
-      }
-    }
-
-    if ($is_multiple) {
-      // The group of elements all-together need some extra functionality after
-      // building up the full list (like draggable table rows).
-      $elements['#file_upload_delta'] = $delta;
-      $elements['#type'] = 'details';
-      $elements['#open'] = TRUE;
-      $elements['#theme'] = 'file_widget_multiple';
-      $elements['#theme_wrappers'] = ['details'];
-      $elements['#process'] = [[static::class, 'processMultiple']];
-      $elements['#title'] = $title;
-
-      $elements['#description'] = $description;
-      $elements['#field_name'] = $field_name;
-      $elements['#language'] = $items->getLangcode();
-      // The field settings include defaults for the field type. However, this
-      // widget is a base class for other widgets (e.g., ImageWidget) that may
-      // act on field types without these expected settings.
-      $field_settings = $this->getFieldSettings() + ['display_field' => NULL];
-      $elements['#display_field'] = (bool) $field_settings['display_field'];
-
-      // Add some properties that will eventually be added to the file upload
-      // field. These are added here so that they may be referenced easily
-      // through a hook_form_alter().
-      $elements['#file_upload_title'] = $this->t('Add a new file');
-      $elements['#file_upload_description'] = [
-        '#theme' => 'file_upload_help',
-        '#description' => '',
-        '#upload_validators' => $elements[0]['fichier']['#upload_validators'],
-        '#cardinality' => $cardinality,
-      ];
-    }
+  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
+    
+    $this->fieldDefinition->getFieldStorageDefinition()->setCardinality(FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
+    $elements = parent::formMultipleElements($items, $form, $form_state);
 
     return $elements;
   }
+
 
 }
