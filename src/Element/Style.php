@@ -21,12 +21,12 @@ class Style extends FormElementBase {
     return [
       '#input' => TRUE,
       '#process' => [
-        [$class, 'processStyle'],
+        [$this, 'processStyle'],
       ],
     ];
   }
 
-  public static function processStyle(&$element, FormStateInterface $form_state, &$complete_form) {
+  public function processStyle(&$element, FormStateInterface $form_state, &$complete_form) {
 
     $input_exists = FALSE;
 

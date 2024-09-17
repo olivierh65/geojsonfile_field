@@ -17,13 +17,18 @@ class StyleMapping extends FormElementBase {
   public function getInfo() {
     return [
       '#input' => TRUE,
+      '#cardinality' => 5,
+    '#multiple' => true,
+    '#tree' => true,
+    '#max_delta' => 0,
+    'items_count' => 2,
       '#process' => [
         [$this, 'processStyleMapping'],
       ],
     ];
   }
 
-  public static function processStyleMapping(&$element, FormStateInterface $form_state, &$complete_form) {
+  public function processStyleMapping(&$element, FormStateInterface $form_state, &$complete_form) {
 
     $input_exists = FALSE;
     $config = \Drupal::config('geojsonfile_field.settings');
@@ -38,9 +43,9 @@ class StyleMapping extends FormElementBase {
     );
    
     $geojson = NestedArray::getValue($form_state->getValues(), array_slice($element['#parents'], 0, 2));
-    if (isset($geojson['fichier']['fids']) && (isset($geojson['fichier']['fids'][0])) && (!isset($geo_properties))) {
+    if (isset($geojson['track']['fichier']['fids']) && (isset($geojson['track']['fichier']['fids'][0])) && (!isset($geo_properties))) {
       $props = [];
-      $file = File::Load($geojson['fichier']['fids'][0]);
+      $file = File::Load($geojson['track']['fichier']['fids'][0]);
       $cont = file_get_contents($file->getFileUri());
       $features = json_decode($cont, true);
       if (!isset($features['features'])) {
@@ -126,6 +131,7 @@ class StyleMapping extends FormElementBase {
         '#default_value' => (isset($item['Attribute']['value']) && ($item['Attribute']['value'] != '' && (isset($geo_properties))) &&
           in_array($item['Attribute']['value'], ($geo_properties)[$element['Attribute']['attribut']['#default_value']]))
           ? $item['Attribute']['value'] :  null,
+        '#value' => null,
         '#description' => t('Attibute value '),
         '#maxlength' => 64,
         '#size' => 1,
