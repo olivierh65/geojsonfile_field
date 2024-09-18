@@ -18,10 +18,10 @@ class StyleMapping extends FormElementBase {
     return [
       '#input' => TRUE,
       '#cardinality' => 5,
-    '#multiple' => true,
-    '#tree' => true,
-    '#max_delta' => 0,
-    'items_count' => 2,
+      '#multiple' => true,
+      '#tree' => true,
+      '#max_delta' => 0,
+      '#items_count' => 3,
       '#process' => [
         [$this, 'processStyleMapping'],
       ],
@@ -41,7 +41,7 @@ class StyleMapping extends FormElementBase {
       $form_state->getValues(),
       array_merge(array_slice($element['#parents'], 0, 2), ['geo_properties'])
     );
-   
+
     $geojson = NestedArray::getValue($form_state->getValues(), array_slice($element['#parents'], 0, 2));
     if (isset($geojson['track']['fichier']['fids']) && (isset($geojson['track']['fichier']['fids'][0])) && (!isset($geo_properties))) {
       $props = [];
@@ -83,9 +83,9 @@ class StyleMapping extends FormElementBase {
 
     if ($geo_properties == null) {
       // TEST
-      $a=1;
+      $a = 1;
     }
-    
+
     if (isset($field_element)) {
       $item = $field_element;
     } else {
@@ -93,73 +93,73 @@ class StyleMapping extends FormElementBase {
     }
 
 
-      $element['Attribute'] = [
-        '#type' => 'fieldset',
-        '#attributes' => [
-          'style' => [
-            'display: inline;'
-          ]
+    $element['Attribute'] = [
+      '#type' => 'fieldset',
+      '#attributes' => [
+        'style' => [
+          'display: inline;'
         ]
-      ];
+      ]
+    ];
 
-      $element['Attribute']['attribut'] = [
-        '#type' => 'select',
-        '#title' => t('Attribut Name'),
-        '#default_value' => (isset($item['Attribute']['attribut']) && ($item['Attribute']['attribut'] != ''))
-          ? $item['Attribute']['attribut'] : ($geo_properties != null ? array_keys($geo_properties)[0] : ''),
-        '#description' => t('Attribute name '),
-        '#options' => $geo_properties != null ?
-          array_combine(array_keys($geo_properties), array_keys($geo_properties)) :
-          [],
-        '#maxlength' => 64,
-        '#size' => 1,
-        '#weight' => 1,
-        '#ajax' => [
-          'callback' => [$this, 'updatePropValues'],
-          'disable-refocus' => FALSE, // Or TRUE to prevent re-focusing on the triggering element.
-          'event' => 'change',
-          'wrapper' => 'properties_value_' . $delta_geojson . '_' . $delta_attrib, // This element is updated with this AJAX callback.
-          'progress' => [
-            'type' => 'throbber',
-            'message' => t('Verifying entry...'),
-          ],
-        ]
-      ];
-      $element['Attribute']['value'] = [
-        '#type' => 'select',
-        '#title' => t('Attribut Value'),
-        '#default_value' => (isset($item['Attribute']['value']) && ($item['Attribute']['value'] != '' && (isset($geo_properties))) &&
-          in_array($item['Attribute']['value'], ($geo_properties)[$element['Attribute']['attribut']['#default_value']]))
-          ? $item['Attribute']['value'] :  null,
-        '#value' => null,
-        '#description' => t('Attibute value '),
-        '#maxlength' => 64,
-        '#size' => 1,
-        '#weight' => 2,
-        '#prefix' => '<div id="properties_value_' . $delta_geojson . '_' . $delta_attrib . '">',
-        '#suffix' => '</div>',
-        '#options' => $geo_properties != null ?
-          array_combine(($geo_properties)[$element['Attribute']['attribut']['#default_value']],
-            ($geo_properties)[$element['Attribute']['attribut']['#default_value']]
-          ) :
-          [],
-      ];
+    $element['Attribute']['attribut'] = [
+      '#type' => 'select',
+      '#title' => t('Attribut Name'),
+      '#default_value' => (isset($item['Attribute']['attribut']) && ($item['Attribute']['attribut'] != ''))
+        ? $item['Attribute']['attribut'] : ($geo_properties != null ? array_keys($geo_properties)[0] : ''),
+      '#description' => t('Attribute name '),
+      '#options' => $geo_properties != null ?
+        array_combine(array_keys($geo_properties), array_keys($geo_properties)) :
+        [],
+      '#maxlength' => 64,
+      '#size' => 1,
+      '#weight' => 1,
+      '#ajax' => [
+        'callback' => [$this, 'updatePropValues'],
+        'disable-refocus' => FALSE, // Or TRUE to prevent re-focusing on the triggering element.
+        'event' => 'change',
+        'wrapper' => 'properties_value_' . $delta_geojson . '_' . $delta_attrib, // This element is updated with this AJAX callback.
+        'progress' => [
+          'type' => 'throbber',
+          'message' => t('Verifying entry...'),
+        ],
+      ]
+    ];
+    $element['Attribute']['value'] = [
+      '#type' => 'select',
+      '#title' => t('Attribut Value'),
+      '#default_value' => (isset($item['Attribute']['value']) && ($item['Attribute']['value'] != '' && (isset($geo_properties))) &&
+        in_array($item['Attribute']['value'], ($geo_properties)[$element['Attribute']['attribut']['#default_value']]))
+        ? $item['Attribute']['value'] :  null,
+      '#value' => null,
+      '#description' => t('Attibute value '),
+      '#maxlength' => 64,
+      '#size' => 1,
+      '#weight' => 2,
+      '#prefix' => '<div id="properties_value_' . $delta_geojson . '_' . $delta_attrib . '">',
+      '#suffix' => '</div>',
+      '#options' => $geo_properties != null ?
+        array_combine(($geo_properties)[$element['Attribute']['attribut']['#default_value']],
+          ($geo_properties)[$element['Attribute']['attribut']['#default_value']]
+        ) :
+        [],
+    ];
 
-      $element['Attribute']['label'] = [
-        '#type' => 'textfield',
-        '#title' => t('Label'),
-        '#default_value' => $item['Attribute']['label'] ?? NULL,
-        '#description' => t('Text displayed for this attribute '),
-        '#maxlength' => 64,
-        '#size' => 12,
-        '#weight' => 2,
-      ];
+    $element['Attribute']['label'] = [
+      '#type' => 'textfield',
+      '#title' => t('Label'),
+      '#default_value' => $item['Attribute']['label'] ?? NULL,
+      '#description' => t('Text displayed for this attribute '),
+      '#maxlength' => 64,
+      '#size' => 12,
+      '#weight' => 2,
+    ];
 
-      $element['Style'] = [
-        '#type' => 'leaflet_style',
-        '#title' => t('Style Mapping'),
-        '#weight' => 2,
-      ];
+    $element['Style'] = [
+      '#type' => 'leaflet_style',
+      '#title' => t('Style Mapping'),
+      '#weight' => 2,
+    ];
     return $element;
   }
 
@@ -190,5 +190,4 @@ class StyleMapping extends FormElementBase {
     $form_state->clearErrors();
     return $element;
   }
-
 }

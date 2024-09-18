@@ -177,10 +177,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
       '#open' => false,
       '#weight' => 20,
     ];
-    $element['mapping']['attribut']['attributes'] = [
-      '#type' => 'container',
-      '#weight' => 20,
-    ];
+
     $element['mapping']['attribut']['_nb_attribut'] = [
       '#type' => 'value',
       '#description' => 'number of attributs for delta ' . $delta + 1,
@@ -219,7 +216,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
       $geo_properties = null;
     }
 
-    $attribs = $element['mapping']['attribut']['attributes'];
+    /* $attribs = $element['mapping']['attribut']['attributes'];
     $previous_mappings = $form_state->getValue(['mapping', 'attribut', '_nb_attribut']);
     if ($file_selected) {
       $num_mappings = 0;
@@ -239,21 +236,26 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
     } else if (!$num_mappings) {
       $num_mappings = 0;
       $form_state->setValue(['mapping', 'attribut', '_nb_attribut'], $num_mappings);
-    }
+    } */
 
-    for ($i = 0; $i <= $num_mappings; $i++) {
+    // for ($i = 0; $i <= $num_mappings; $i++) {
 
-      $element['mapping']['attribut']['attributes'][$i] = array(
-        '#title' => 'Style Mapping',
-        '#type' => 'leaflet_style_mapping',
-        '#description' => 'Mapping ' . $delta . ':' . $i,
-        '#cardinality' => 1,
-        '#weight' => 1,
-        '#value_callback' => [$this, 'mappingUnserialize'],
-      );
+    $element['mapping']['attribut']['attributes'] = [
+      '#type' => 'element_multiple',
+      '#title' => 'Multiple values',
+      //'#cardinality' => 3,
+      '#element' => [
+        'mapping' => [
+          '#title' => 'Style Mapping',
+          '#type' => 'leaflet_style_mapping',
+          '#description' => 'Mapping ' . $delta . ':',
+          '#value_callback' => [$this, 'mappingUnserialize'],
+        ]
+      ]
+    ];
 
-      // If there is more than one name, add the remove button.
-      if ($num_mappings >= 1) {
+    // If there is more than one name, add the remove button.
+    /* if ($num_mappings >= 1) {
         $element['mapping']['attribut']['attributes'][$i]['actions'] = [
           '#type' => 'actions',
         ];
@@ -268,15 +270,15 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
             'wrapper' => 'mapping-fieldset-wrapper' . $delta,
           ],
         ];
-      }
-    }
+      } */
+    // }
 
-    if ($num_mappings > $previous_mappings) {
+    /* if ($num_mappings > $previous_mappings) {
       // ajout d'un mapping
       $form_state->setRebuild();
-    }
+    } */
 
-    $element['mapping']['actions'] = [
+    /* $element['mapping']['actions'] = [
       '#type' => 'actions',
     ];
 
@@ -290,7 +292,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
         'callback' => [$this, 'addmoreCallback'],
         'wrapper' => 'mapping-fieldset-wrapper' . $delta,
       ],
-    ];
+    ]; */
 
 
     /* $element['mapping']['attribut'] = [
