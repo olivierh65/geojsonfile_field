@@ -24,6 +24,7 @@ use Drupal\Component\Utility\Environment;
  *   category = @Translation("Custom"),
  *   default_widget = "geojsonfile_widget",
  *   default_formatter = "geojsonfile_formatter",
+ *   cardinality = -1,
  * )
  */
 //default_formatter = "leaflet_edit_formatter",
@@ -101,7 +102,12 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
           'description' => 'fillrule.',
           'type' => 'varchar',
           'length' => 64,
-        ]
+        ],
+        'mappings' => [
+          'description' => 'serialized mappings.',
+          'type' => 'blob',
+          'size' => 'normal',
+        ],
       ]
     ];
     return $schema;
@@ -116,7 +122,7 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
     $properties['description'] = DataDefinition::create('string')->setLabel('description');
     $properties['stroke'] = DataDefinition::create('boolean')->setLabel('stroke');
     $properties['color'] = DataDefinition::create('string')->setLabel('color');
-    $properties['color'] = DataDefinition::create('integer')->setLabel('color');
+    $properties['weight'] = DataDefinition::create('integer')->setLabel('weight');
     $properties['opacity'] = DataDefinition::create('float')->setLabel('opacity');
     $properties['linecap'] = DataDefinition::create('string')->setLabel('linecap');
     $properties['linejoin'] = DataDefinition::create('string')->setLabel('linejoin');
@@ -126,6 +132,8 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
     $properties['fill_color'] = DataDefinition::create('string')->setLabel('fill_color');
     $properties['fill_opacity'] = DataDefinition::create('float')->setLabel('fill_opacity');
     $properties['fillrule'] = DataDefinition::create('string')->setLabel('fillrule');
+    $properties['mappings'] = DataDefinition::create('string')->setLabel('mappings');
+    
 
     return $properties;
   }
@@ -138,6 +146,26 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
       '#tree' => true,
     ];
 
+    $element['max_geojson_file'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Max geojson file'),
+      '#default_value' => $settings['max_geojson_file'] ?? 5,
+      '#description' => $this->t('Maxi geojson files'),
+      '#min' => 1,
+      '#max' => 20,
+      '#step' => 1,
+    ];
+
+    $element['max_mapping'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Max mappings'),
+      '#default_value' => $settings['max_mapping'] ?? 5,
+      '#description' => $this->t('Maxi mappings'),
+      '#min' => 1,
+      '#max' => 20,
+      '#step' => 1,
+    ];
+    
     $element['track'] = [
       '#title' => 'Track file',
       '#type' => 'details',
@@ -324,6 +352,8 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
 
     // Get the parent field settings
     $settings = [
+      'max_geojson_file' => 5,
+      'max_mapping' => 5,
       'track' => [
         'progress_indicator' => 'throbber',
         'file_directory' => "[date:custom:Y]-[date:custom:m]",
@@ -346,6 +376,11 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
       ],
     ];
     return $settings;
+  }
+
+  public function preSave() {
+    $a=1;
+    parent::preSave();
   }
 
 }

@@ -26,6 +26,10 @@ use Drupal\file\Element\ManagedFile;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
 use Drupal\Core\Field\WidgetInterface;
 use Drupal\Component\Utility\Environment;
+use Drupal\Core\StringTranslation\ByteSizeMarkup;
+use Drupal\file\Plugin\Field\FieldType\FileItem;
+
+
 
 
 /**
@@ -49,40 +53,77 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
    */
   static protected $fieldName = null;
 
+  /**
+   * Overrides \Drupal\Core\Field\WidgetBase::formMultipleElements().
+   *
+   * Special handling for draggable multiple widgets and 'add more' button.
+   */
+  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
+
+    $this->fieldDefinition->getFieldStorageDefinition()->setCardinality(FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
+
+    $field_name = $this->fieldDefinition->getName();
+    $parents = $form['#parents'];
+
+    $field_state = static::getWidgetState($parents, $field_name, $form_state);
+    $nb_ = 0;
+    foreach ($items->getIterator() as $ikey => $ivalue) {
+      $a = $ikey;
+      if (isset($ivalue->getValue()['target_id']) && $ivalue->getValue()['target_id'] > 0) {
+        // if ($ivalue->get('target_id')->getValue() > 0) {
+        $nb_++;
+      }
+    }
+    $field_state = [
+      'items_count' => $nb_,
+      'array_parents' => [],
+    ];
+    static::setWidgetState($parents, $field_name, $form_state, $field_state);
+
+
+
+    $elements = parent::formMultipleElements($items, $form, $form_state);
+
+    return $elements;
+  }
+
   public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
 
     if (static::$fieldName == null) {
-      static::$fieldName=$this->fieldDefinition->getName();
+      static::$fieldName = $this->fieldDefinition->getName();
     }
-    
-    $element = [];
-    $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
+
+    $settings = $this->getSettings();
+
+    // $element = [];
+    $element['#cardinality'] = 5;
     $element['#multiple'] = true;
     $element['#tree'] = true;
     $element['#max_delta'] = 0;
 
 
-    $element['data'] = [
-        '#title' => 'Data ' . $delta,
-        '#type' => 'details',
-        '#open' => true,
-        '#weight' => 10,
-      ];
-    $element['data']['fichier'] = [
+    $element['track'] = [
+      '#title' => 'Data ' . $delta,
+      '#type' => 'details',
+      '#open' => false,
+      '#weight' => 10,
+    ];
+    $element['track']['fichier'] = [
       '#type' => 'managed_file',
       '#title' => "Fichier $delta",
       '#upload_validators' =>  [
-        'file_validate_extensions' => ['geojson'],
-        'file_validate_size' => [Environment::getUploadMaxSize()],
+        'file_validate_extensions' => [$settings['track']['file_extensions']],
+        'file_validate_size' => $settings['track']['file_extensions'] === null ?
+          [Environment::getUploadMaxSize()] :
+          [$settings['track']['file_extensions']],
       ],
       '#default_value' => [
-        'fids' => $items[$delta]->get('target_id')->getCastedValue() ?? 0
+        'fids' => $items[$delta]->getValue()['target_id'] ?? 0
       ],
       '#fids' => 0,
-      '#multiple' => false,
     ];
 
-    $element['data']['description'] = [
+    $element['track']['description'] = [
       '#type' => 'textfield',
       '#title' => t('Description'),
       '#default_value' => $items[$delta]->fichier,
@@ -93,14 +134,16 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
       // '#access' => null !== $form_state->getValue(['field_data', $delta, 'data', 'fichier']) ? true : false,
     ];
 
-    if (isset($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'])) {
-      $file_selected = $form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0] > 0;
+    if (null !== $form_state->getValue([$items->getName(), $delta, 'track', 'fichier'])) {
+      $fid = reset($form_state->getValue([$items->getName(), $delta, 'track', 'fichier']));
     } else {
-      $file_selected = false;
+      $fid = $items[$delta]->getValue()['target_id'] ?? 0; // $items->get($delta)->get('target_id')->getCastedValue() ?? 0;
     }
-   
 
-    $element['fichier']['style'] = [
+    $file_selected = $fid > 0;
+
+
+    $element['style'] = [
       '#title' => 'Global style',
       '#type' => 'details',
       '#open' => false,
@@ -109,17 +152,18 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
       '#weight' => 19,
     ];
 
-    $element['fichier']['style']['leaflet_style'] = [
+    $element['style']['leaflet_style'] = [
       '#title' => 'Test leaflet_style',
       '#type' => 'leaflet_style',
       '#weight' => 1,
-      '#value_callback' => [$this, 'styleUnserialize'],
+      // '#value_callback' => [$this, 'styleUnserialize'],
     ];
 
-    $element['fichier']['mapping'] = [
-      '#title' => 'Attribute style',
+    $element['mapping'] = [
+      '#title' => 'Mapping style',
       '#type' => 'details',
-      '#open' => ((null !== $form_state->getValue("last_added")) && $delta == $form_state->getValue("last_added")) ? true : false,
+      '#open' => ((null !== $form_state->getValue("last_added")) && $delta == $form_state->getValue("last_added") ||
+        ((null === $form_state->getValue("last_added")) && $file_selected == true)) ? true : false,
       '#prefix' => '<div id="mapping-fieldset-wrapper' . $delta . '">',
       '#suffix' => '</div>',
       // hide until a file is selected
@@ -127,100 +171,147 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
       '#weight' => 20,
     ];
 
-    $element['fichier']['_nb_attribut'] = [
+    $element['mapping']['attribut'] = [
+      '#title' => 'Attribute ' . $delta + 1,
+      '#type' => 'details',
+      '#open' => false,
+      '#weight' => 20,
+    ];
+
+    $element['mapping']['attribut']['_nb_attribut'] = [
       '#type' => 'value',
       '#description' => 'number of attributs for delta ' . $delta + 1,
       '#value' => 0,
     ];
     // save number of attributs mapping
-    $form_state->setValue(['_nb_attribut'], $element['fichier']['_nb_attribut']['#value']);
+    $form_state->setValue(['mapping', 'attribut', '_nb_attribut'], $element['mapping']['attribut']['_nb_attribut']['#value']);
 
 
 
-    if ($file_selected && (! isset($this->geo_properties))) {
+    if ($file_selected && (! isset($geo_properties))) {
       $props = [];
-      $file = File::Load($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0]);
-      $cont = file_get_contents($file->getFileUri());
-      foreach (json_decode($cont, true)['features'] as $feature) {
-        if ($feature['type'] == "Feature") {
-          foreach ($feature['properties'] as $key => $val) {
-            $props[$key][] = $val;
+      $file = File::Load($fid);
+      if ($file != null) {
+        $cont = file_get_contents($file->getFileUri());
+        foreach (json_decode($cont, true)['features'] as $feature) {
+          if ($feature['type'] == "Feature") {
+            foreach ($feature['properties'] as $key => $val) {
+              $props[$key][] = $val;
+            }
           }
         }
-      }
 
-      foreach ($props as $key => $value) {
-        // remove duplicate entries and also item contening only null
-        $ar = array_unique($props[$key]);
-        if ((count($ar) == 0) || (count($ar) == 1 && $ar[0] == null)) {
-          continue;
+        foreach ($props as $key => $value) {
+          // remove duplicate entries and also item contening only null
+          $ar = array_unique($props[$key]);
+          if ((count($ar) == 0) || (count($ar) == 1 && $ar[0] == null)) {
+            continue;
+          }
+          $props_uniq[$key] = $ar;
         }
-        $props_uniq[$key] = $ar;
+        $geo_properties = $props_uniq;
       }
-      $this->geo_properties = $props_uniq;
+    } else {
+      // TODO : Erreur fid existant mais fichier pas chargé
+      $geo_properties = null;
     }
 
-    $num_names = $form_state->getValue('_nb_attribut');
-    if (!$num_names && isset($element['fichier']['mappings'])) {
-      $num_names = count($element['fichier']['mappings']) ?? 0;
-      $form_state->setValue('_nb_attribut', $num_names);
-    } else if (!$num_names) {
-      $num_names = 0;
-      $form_state->setValue('_nb_attribut', $num_names);
+    /* $attribs = $element['mapping']['attribut']['attributes'];
+    $previous_mappings = $form_state->getValue(['mapping', 'attribut', '_nb_attribut']);
+    if ($file_selected) {
+      $num_mappings = 0;
+    } else {
+      $num_mappings = -1;
+    }
+    foreach ($attribs as $attrib) {
+      if (is_array($attrib)) {
+        $num_mappings++;
+      }
     }
 
-    for ($i = 0; $i < $num_names; $i++) {
-      $element['fichier']['mapping']['attribut'][$i] = [
-        '#title' => 'Attribute ' . $i,
-        '#type' => 'details',
-        '#open' => false,
-        '#weight' => $i,
-      ];
+    // $num_mappings = $form_state->getValue(['mapping', 'attribut', '_nb_attribut']);
+    if (!$num_mappings && isset($element['mapping']['attribut']['attributes'])) {
+      // $num_mappings = count($element['mapping']['attribut']['attributes']) ?? 0;
+      $form_state->setValue(['mapping', 'attribut', '_nb_attribut'], $num_mappings);
+    } else if (!$num_mappings) {
+      $num_mappings = 0;
+      $form_state->setValue(['mapping', 'attribut', '_nb_attribut'], $num_mappings);
+    } */
 
-      $element['fichier']['mapping']['attribut'][$i]['leaflet_style_mapping'] = array(
-        '#title' => 'Style Mapping',
-        '#type' => 'leaflet_style_mapping',
-        '#description' => 'Mapping ' . $delta . ':' . $i,
-        '#cardinality' => 10,
-        '#weight' => 1,
-        '#value_callback' => [$this, 'mappingUnserialize'],
-      );
+    // for ($i = 0; $i <= $num_mappings; $i++) {
 
-      // If there is more than one name, add the remove button.
-    if ($num_names >= 1) {
-      $element['fichier']['mapping']['attribut'][$i]['actions'] = [
-        '#type' => 'actions',
-      ];
-      $element['fichier']['mapping']['attribut'][$i]['actions']['remove_name'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Remove last'),
-        '#submit' => [static::class, 'removeLast'],
-        '#description' => 'Remove ' . $delta,
-        '#name' => 'remove_' . $delta, // #name must be defined and unique
-        '#ajax' => [
-          'callback' => [$this, 'addmoreCallback'],
-          'wrapper' => 'mapping-fieldset-wrapper' . $delta,
-        ],
-      ];
-    }
-    }
+    $element['mapping']['attribut']['attributes'] = [
+      '#type' => 'element_multiple',
+      '#title' => 'Multiple values',
+      //'#cardinality' => 3,
+      '#element' => [
+        'mapping' => [
+          '#title' => 'Style Mapping',
+          '#type' => 'leaflet_style_mapping',
+          '#description' => 'Mapping ' . $delta . ':',
+          '#value_callback' => [$this, 'mappingUnserialize'],
+        ]
+      ]
+    ];
 
-    $element['fichier']['mapping']['actions'] = [
+    // If there is more than one name, add the remove button.
+    /* if ($num_mappings >= 1) {
+        $element['mapping']['attribut']['attributes'][$i]['actions'] = [
+          '#type' => 'actions',
+        ];
+        $element['mapping']['attribut']['attributes'][$i]['actions']['remove_name'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Remove last'),
+          '#submit' => [static::class, 'removeLast'],
+          '#description' => 'Remove ' . $delta,
+          '#name' => 'remove_' . $delta, // #name must be defined and unique
+          '#ajax' => [
+            'callback' => [$this, 'addmoreCallback'],
+            'wrapper' => 'mapping-fieldset-wrapper' . $delta,
+          ],
+        ];
+      } */
+    // }
+
+    /* if ($num_mappings > $previous_mappings) {
+      // ajout d'un mapping
+      $form_state->setRebuild();
+    } */
+
+    /* $element['mapping']['actions'] = [
       '#type' => 'actions',
     ];
 
-    $element['fichier']['mapping']['actions']['add_name'] = [
+    $element['mapping']['actions']['add_name'] = [
       '#type' => 'submit',
       '#value' => $this->t('Add one more'),
-      '#submit' => [ [static::class, 'addOne'] ],
+      '#submit' => [[static::class, 'addOne']],
       '#description' => 'Add ' . $delta,
       '#name' => 'add_' . $delta, // #name must be defined and unique
       '#ajax' => [
         'callback' => [$this, 'addmoreCallback'],
         'wrapper' => 'mapping-fieldset-wrapper' . $delta,
       ],
-    ];
-    
+    ]; */
+
+
+    /* $element['mapping']['attribut'] = [
+      '#type' => 'element_multiple',
+      '#title' => 'Multiple values',
+      '#min_items' => 1,
+      '#cardinality' => 10,
+      '#element' => [
+        '#title' => 'Style Mapping',
+        '#type' => 'leaflet_style_mapping',
+        '#description' => 'Mapping ' . $delta,
+        '#cardinality' => 10,
+        '#weight' => 1,
+        '#value_callback' => [$this, 'mappingUnserialize'],
+        '#multiple' => true,
+        '#tree' => true,
+        '#max_delta' => 1,
+      ],
+    ]; */
 
     // Return the updated widget
     return $element;
@@ -263,7 +354,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
 
     $form_state->setValue("last_added", $parent[1]);
 
-    // Since our buildForm() method relies on the value of 'num_names' to
+    // Since our buildForm() method relies on the value of 'num_mappings' to
     // generate 'name' form elements, we have to tell the form to rebuild. If we
     // don't do this, the form builder will not call buildForm(). */
     $form_state->setRebuild();
@@ -285,7 +376,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
       $remove_button = $name_field - 1;
       $form_state->setValue($nb_attribut_array, $remove_button);
     }
-    // Since our buildForm() method relies on the value of 'num_names' to
+    // Since our buildForm() method relies on the value of 'num_mappings' to
     // generate 'name' form elements, we have to tell the form to rebuild. If we
     // don't do this, the form builder will not call buildForm().
     $form_state->setRebuild();
@@ -301,7 +392,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
     $data = array_slice($element['#parents'], 0, 2);
 
     $data[] = 'mappings';
-    if ($form_state->getValue($data)) {
+    if ($form_state->getValue($data) && is_string($form_state->getValue($data))) {
       $a = unserialize($form_state->getValue($data));
       return $a['attribut'][array_slice($element['#parents'], 4, 1)[0]]['leaflet_style_mapping'];
     } else {
@@ -330,37 +421,48 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
    * {@inheritdoc}
    */
   public static function defaultSettings() {
-    return [
-      'progress_indicator' => 'throbber',
-      'file_directory' => '',
-      'max_filesize' => '10MB',
-    ] + parent::defaultSettings();
+    // recupere es settings definies dans le Field 
+    $default_settings = \Drupal::service('plugin.manager.field.field_type')->getDefaultFieldSettings('geojsonfile_field');
+    return $default_settings;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function ___fieldSettingsForm(array $form, FormStateInterface $form_state) {
-    $element = [];
+  public function settingsForm(array $form, FormStateInterface $form_state) {
     $settings = $this->getSettings();
+    // recupere es settings definies dans le Field 
+    $default_settings = \Drupal::service('plugin.manager.field.field_type')->getDefaultFieldSettings('geojsonfile_field');
 
-    $element['file_directory'] = [
+    $element = [
+      '#tree' => true,
+    ];
+
+    $element['track'] = [
+      '#title' => 'Track file',
+      '#type' => 'details',
+      '#open' => true,
+      '#weight' => 10,
+      '#tree' => true,
+    ];
+
+    $element['track']['file_directory'] = [
       '#type' => 'textfield',
       '#title' => $this->t('File directory'),
-      '#default_value' => $settings['file_directory'],
+      '#default_value' => $settings['track']['file_directory'] ?? $default_settings['track']['file_directory'] ?? 'tracks',
       '#description' => $this->t('Optional subdirectory within the upload destination where files will be stored. Do not include preceding or trailing slashes.'),
-      '#element_validate' => [[static::class, 'validateDirectory']],
+      '#element_validate' => [[FileItem::class, 'validateDirectory']],
       '#weight' => 3,
     ];
 
     // Make the extension list a little more human-friendly by comma-separation.
-    $extensions = str_replace(' ', ', ', $settings['file_extensions']);
-    $element['file_extensions'] = [
+    $extensions = str_replace(' ', ', ', ($settings['track']['file_extensions'] ?? $default_settings['track']['file_extensions'] ?? '[geojson]'));
+    $element['track']['file_extensions'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Allowed file extensions'),
       '#default_value' => $extensions,
       '#description' => $this->t("Separate extensions with a comma or space. Each extension can contain alphanumeric characters, '.', and '_', and should start and end with an alphanumeric character."),
-      '#element_validate' => [[static::class, 'validateExtensions']],
+      '#element_validate' => [[FileItem::class, 'validateExtensions']],
       '#weight' => 1,
       '#maxlength' => 256,
       // By making this field required, we prevent a potential security issue
@@ -368,24 +470,148 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
       '#required' => TRUE,
     ];
 
-    $element['max_filesize'] = [
+    $element['track']['max_filesize'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Maximum upload size'),
-      '#default_value' => $settings['max_filesize'],
+      '#default_value' => $settings['track']['max_filesize'] ?? $default_settings['track']['max_filesize'] ?? '5MB',
       '#description' => $this->t('Enter a value like "512" (bytes), "80 KB" (kilobytes) or "50 MB" (megabytes) in order to restrict the allowed file size. If left empty the file sizes could be limited only by PHP\'s maximum post and file upload sizes (current limit <strong>%limit</strong>).', [
         '%limit' => ByteSizeMarkup::create(Environment::getUploadMaxSize()),
       ]),
       '#size' => 10,
-      '#element_validate' => [[static::class, 'validateMaxFilesize']],
+      '#element_validate' => [[FileItem::class, 'validateMaxFilesize']],
       '#weight' => 5,
     ];
 
-    $element['description_field'] = [
+    $element['style'] = [
+      '#title' => 'Leaflet style',
+      '#type' => 'details',
+      '#open' => true,
+      '#weight' => 20,
+      '#tree' => true,
+    ];
+
+    $element['style']['stroke'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Enable <em>Description</em> field'),
-      '#default_value' => $settings['description_field'] ?? '',
-      '#description' => $this->t('The description field allows users to enter a description about the uploaded file.'),
+      '#title' => t('<em>Stroke</em> field'),
+      '#default_value' => $settings['style']['stroke'] ?? $default_settings['style']['stroke'] ?? TRUE,
+      '#description' => t('Whether to draw stroke along the path.<br>Set it to false to disable borders on polygons or circles.'),
+      '#weight' => 1,
+    ];
+    $element['style']['color'] = [
+      '#type' => 'color',
+      '#title' => t('<em>Color</em> field'),
+      '#default_value' => $settings['style']['color'] ?? $default_settings['style']['color'] ?? '#F00FE8',
+      '#description' => t('Stroke color.'),
+      '#weight' => 2,
+    ];
+    $element['style']['weight'] = [
+      '#type' => 'number',
+      '#title' => t('<em>Weight</em> field'),
+      '#default_value' => $settings['style']['weight'] ?? $default_settings['style']['weight'] ?? 6,
+      '#description' => t('Stroke width in pixels.'),
+      '#min' => 1,
+      '#step' => 1,
+      '#max' => 20,
+      '#weight' => 3,
+    ];
+    $element['style']['opacity'] = [
+      '#type' => 'range',
+      '#title' => t('<em>Opacity</em> field'),
+      '#default_value' => $settings['style']['opacity'] ?? $dafault_settings['style']['opacity'] ?? 1,
+      '#description' => t('Stroke opacity.'),
+      '#min' => 0,
+      '#max' => 1,
+      '#step' => 0.1,
+      '#weight' => 4,
+    ];
+    $element['style']['linecap'] = [
+      '#type' => 'select',
+      '#title' => t('<em>LineCap</em> field'),
+      '#default_value' => $settings['style']['linecap'] ?? $default_settings['style']['linecap'] ?? 'round',
+      '#description' => t('A string that defines shape to be used at the end of the stroke.' .
+        '<br>Butt : indicates that the stroke for each subpath does not extend beyond its two endpoints.' .
+        '<br>Round : indicates that at the end of each subpath the stroke will be extended by a half circle with a diameter equal to the stroke width.' .
+        '<br>Square : indicates that at the end of each subpath the stroke will be extended by a rectangle with a width equal to half the width of the stroke and a height equal to the width of the stroke.'),
+      '#options' => [
+        'butt' => 'Butt',
+        'round' => 'Round',
+        'square' => 'Square',
+      ],
+      '#weight' => 5,
+    ];
+    $element['style']['linejoin'] = [
+      '#type' => 'select',
+      '#title' => t('<em>LineJoin</em> field'),
+      '#default_value' => $settings['style']['linejoin'] ?? $default_settings['style']['linejoin'] ?? 'round',
+      '#description' => t('A string that defines shape to be used at the corners of the stroke.' .
+        '<br>Arcs : indicates that an arcs corner is to be used to join path segments.' .
+        '<br>Bevel : indicates that a bevelled corner is to be used to join path segments.' .
+        '<br>Miter : indicates that a sharp corner is to be used to join path segments.' .
+        '<br>Miter-Clip : indicates that a sharp corner is to be used to join path segments.' .
+        '<br>Round : indicates that a round corner is to be used to join path segments.'),
+      '#options' => [
+        'arcs' => 'Arcs',
+        'bevel' => 'Bevel',
+        'miter' => 'Miter',
+        'miter-clip' => 'Miter-Clip',
+        'round' => 'Round',
+      ],
+      '#weight' => 6,
+    ];
+    $element['style']['dasharray'] = [
+      '#type' => 'textfield',
+      '#title' => t('<em>dashArray</em> field'),
+      '#default_value' => $settings['style']['dasharray'] ?? $default_settings['style']['dasharray'] ?? NULL,
+      '#description' => t('A string that defines the stroke <a href="https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-linejoin>dash pattern</a>. Doesn\'t work on Canvas-powered layers in some old browsers.'),
+      '#maxlength' => 64,
+      '#pattern' => '([0-9]+)(,[0-9]+)*',
+      '#weight' => 7,
+    ];
+    $element['style']['dashoffset'] = [
+      '#type' => 'textfield',
+      '#title' => t('<em>dashOffset</em> field'),
+      '#default_value' => $settings['style']['dashoffset'] ?? $default_settings['style']['dashoffset'] ?? 0,
+      '#description' => t('A string that defines the <a href="https://developer.mozilla.org/docs/Web/SVG/Attribute/stroke-dashoffset">distance into the dash</a> pattern to start the dash.'),
+      '#maxlength' => 64,
+      '#pattern' => '([0-9]+)|([0-9]+%)',
+      '#weight' => 8,
+    ];
+    $element['style']['fill'] = [
+      '#type' => 'checkbox',
+      '#title' => t('<em>Fill</em> field'),
+      '#default_value' => $settings['style']['fill'] ?? $default_settings['style']['fill'] ?? FALSE,
+      '#description' => t('Whether to fill the path with color. Set it to false to disable filling on polygons or circle'),
+      '#weight' => 9,
+    ];
+    $element['style']['fill_color'] = [
+      '#type' => 'color',
+      '#title' => t('<em>Fill Color</em> field'),
+      '#default_value' => $settings['style']['fill_color'] ?? $default_settings['style']['fill_color'] ?? '#C7A8A8',
+      '#description' => t('Fill Color.'),
+      '#weight' => 10,
+    ];
+    $element['style']['fill_opacity'] = [
+      '#type' => 'range',
+      '#title' => t('<em>Fill Opacity</em> field'),
+      '#default_value' => $settings['style']['fill_opacity'] ?? $default_settings['style']['fill_opacity'] ?? 0.2,
+      '#description' => t('Stroke opacity.'),
+      '#min' => 0,
+      '#max' => 1,
+      '#step' => 0.1,
       '#weight' => 11,
+    ];
+    $element['style']['fillrule'] = [
+      '#type' => 'select',
+      '#title' => t('<em>Fill Rule</em> field'),
+      '#default_value' => $settings['style']['fillrule'] ?? $default_settings['style']['fillrule'] ?? 'evenodd',
+      '#description' => t('A string that defines <a href="https://developer.mozilla.org/docs/Web/SVG/Attribute/fill-rule">how the inside of a shape</a> is determined.' .
+        '<br>Nonzero : determines the "insideness" of a point in the shape by drawing a ray from that point to infinity in any direction, and then examining the places where a segment of the shape crosses the ray' .
+        '<br>Evenodd : determines the "insideness" of a point in the shape by drawing a ray from that point to infinity in any direction and counting the number of path segments from the given shape that the ray crosses.'),
+      '#options' => [
+        'nonzero ' => 'Nonzero',
+        'evenodd' => 'Evenodd',
+      ],
+      '#weight' => 12,
     ];
 
     return $element;
@@ -393,6 +619,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
 
 
   public function __massageFormValues(array $values, array $form, FormStateInterface $form_state) {
+
 
     $v = parent::massageFormValues($values, $form, $form_state);
 
@@ -413,20 +640,37 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
    * {@inheritdoc}
    */
   public function massageFormValues(array $values, array $form, FormStateInterface $form_state) {
-    // Since file upload widget now supports uploads of more than one file at a
-    // time it always returns an array of fids. We have to translate this to a
-    // single fid, as field expects single value.
 
-    // $new_values = $this->__massageFormValues($values, $form, $form_state);
-    $new_values = $values;
-    foreach ($new_values as $k1 => &$value) {
-      foreach ($value['fichier'] as $key => $fid) {
-        $value['fichier']['#required'] = true;
-        $value['fichier']['target_id'] = $fid;
-        unset($value['fichier'][$key]);
+    $new_values = [];
+    foreach ($values as $key => $value) {
+
+      if (isset($value['track'])) {
+        foreach ($value['track']['fichier'] as $fid) {
+          $new_values[$key]['target_id'] = (int)$fid;
+        }
+        $new_values[$key]['description'] = $value['track']['description'];
+      }
+
+      if ((isset($value['style'])) && (isset($new_values[$key]['target_id']))) {
+        // $new_values[$key]['styles'] = serialize($value['style']);
+
+        $new_values[$key]['stroke'] = $value['style']['leaflet_style']['stroke'] != 0 ? true : false;
+        $new_values[$key]['color'] = $value['style']['leaflet_style']['color'];
+        $new_values[$key]['weight'] = (int)$value['style']['leaflet_style']['weight'];
+        $new_values[$key]['opacity'] = (float)$value['style']['leaflet_style']['opacity'];
+        $new_values[$key]['linecap'] = $value['style']['leaflet_style']['linecap'];
+        $new_values[$key]['linejoin'] = $value['style']['leaflet_style']['linejoin'];
+        $new_values[$key]['dasharray'] = $value['style']['leaflet_style']['dasharray'];
+        $new_values[$key]['dashoffset'] = (int)$value['style']['leaflet_style']['dashoffset'];
+        $new_values[$key]['fill'] = (int)$value['style']['leaflet_style']['fill'];
+        $new_values[$key]['fill_color'] = $value['style']['leaflet_style']['fill_color'];
+        $new_values[$key]['fill_opacity'] = (float)$value['style']['leaflet_style']['fill_opacity'];
+        $new_values[$key]['fillrule'] = $value['style']['leaflet_style']['fillrule'];
+      }
+      if (isset($value['mapping']) && (isset($new_values[$key]['target_id']))) {
+        $new_values[$key]['mappings'] = serialize($value['mapping']);
       }
     }
-
     return $new_values;
   }
 
@@ -450,7 +694,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
    *
    * This method is assigned as a #value_callback in formElement() method.
    */
-  public static function value($element, $input, FormStateInterface $form_state) {
+  public static function ___value($element, $input, FormStateInterface $form_state) {
     if ($input) {
       if (empty($input['display'])) {
         // Updates the display field with the default value because
@@ -489,7 +733,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
    *
    * This method is assigned as a #process callback in formElement() method.
    */
-  public static function __process($element, FormStateInterface $form_state, $form) {
+  public static function ___process($element, FormStateInterface $form_state, $form) {
     $item = $element['#value'];
     $item['fids'] = $element['fids']['#value'];
 
@@ -592,20 +836,4 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
       parent::flagErrors($items, $violations, $form, $form_state);
     }
   }
-
-  
-  /**
-   * Overrides \Drupal\Core\Field\WidgetBase::formMultipleElements().
-   *
-   * Special handling for draggable multiple widgets and 'add more' button.
-   */
-  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
-    
-    $this->fieldDefinition->getFieldStorageDefinition()->setCardinality(FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
-    $elements = parent::formMultipleElements($items, $form, $form_state);
-
-    return $elements;
-  }
-
-
 }
