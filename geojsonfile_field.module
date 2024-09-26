@@ -6,6 +6,8 @@
  */
 
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Form\FormStateInterface;
+
 
 /**
  * Implements hook_help().
@@ -23,3 +25,11 @@ function geojsonfile_field_help($route_name, RouteMatchInterface $route_match) {
   }
 }
 
+/**
+ * Implements hook_form_alter().
+ */
+function geojsonfile_field_form_node_form_alter(&$form, FormStateInterface    $form_state, $form_id) {
+  // Add conditional properties to fields.
+  
+  return $form;
+}

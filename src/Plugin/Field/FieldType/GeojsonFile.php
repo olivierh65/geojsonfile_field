@@ -378,6 +378,15 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
     return $settings;
   }
 
+  /* public function isEmpty()   {
+    if (isset($this->target_id) && $this->target_id > 0) {
+      return false;
+    }
+    else {
+      return true;
+    }
+  } */
+
   public function preSave() {
     $a=1;
     parent::preSave();

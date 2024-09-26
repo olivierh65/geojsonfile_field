@@ -20,8 +20,6 @@ class StyleMapping extends FormElementBase {
       '#cardinality' => 5,
       '#multiple' => true,
       '#tree' => true,
-      '#max_delta' => 0,
-      '#items_count' => 3,
       '#process' => [
         [$this, 'processStyleMapping'],
       ],
@@ -33,8 +31,8 @@ class StyleMapping extends FormElementBase {
     $input_exists = FALSE;
     $config = \Drupal::config('geojsonfile_field.settings');
 
-    $delta_attrib = array_slice($element['#parents'], 4, 1)[0];
-    $delta_geojson = array_slice($element['#parents'], 1, 1)[0];
+    $delta_attrib = array_slice($element['#parents'], 4, 1)[0] ?? 0;
+    $delta_geojson = array_slice($element['#parents'], 1, 1)[0] ?? 0;
 
     // retreive properties defined in geojson file
     $geo_properties = NestedArray::getValue(
