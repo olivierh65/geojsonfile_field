@@ -28,6 +28,7 @@ use Drupal\Core\Field\WidgetInterface;
 use Drupal\Component\Utility\Environment;
 use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\file\Plugin\Field\FieldType\FileItem;
+use Drupal\Component\Utility\Bytes;
 
 
 
@@ -47,7 +48,7 @@ use Drupal\file\Plugin\Field\FieldType\FileItem;
 
 //  *   multiple_values = false
 
-class GeojsonFileWidget extends WidgetBase implements WidgetInterface, TrustedCallbackInterface {
+class GeojsonFileWidget extends WidgetBase /* FileWidget */ implements WidgetInterface, TrustedCallbackInterface {
 
   /**
    * The file system service.
@@ -107,7 +108,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface, TrustedCa
     $element['#multiple'] = true;
     $element['#tree'] = true;
     // $element['#max_delta'] = $field_state['items_count'];
-    $form['#validate'][] = [$this, "validate"];
+    // $form['#validate'][] = [$this, "validate"];
 
 
     $element['track'] = [
@@ -132,23 +133,23 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface, TrustedCa
         'id' => 'track_fid_' . $delta,
       ],
     ];
-    
+
     $element['track']['fichier'] = [
       '#type' => 'managed_file',
       '#title' => "Fichier $delta",
       '#upload_validators' =>  [
         'file_validate_extensions' => [$settings['track']['file_extensions']],
-        'file_validate_size' => $settings['track']['file_extensions'] === null ?
+        'file_validate_size' => $settings['track']['max_filesize'] === null ?
           [Environment::getUploadMaxSize()] :
-          [$settings['track']['file_extensions']],
+          [Bytes::toNumber($settings['track']['max_filesize'])],
       ],
       '#default_value' => [
         'fids' => $fid,
       ],
-      '#pre_render' => [
+      /* '#pre_render' => [
         [$this, 'preRenderManagedFile'],
-      ],
-      '#fids' => 0,
+      ], */
+      // '#fids' => 0,
     ];
 
     $element['track']['description'] = [
@@ -163,7 +164,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface, TrustedCa
       ],
       '#states' => [
         'visible' => [
-          ':input[id="track_fid_' . $delta .'"]' =>
+          ':input[id="track_fid_' . $delta . '"]' =>
           ['!value' => 0],
         ],
       ],
@@ -361,7 +362,7 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface, TrustedCa
     return $element;
   }
 
-  public function validate(&$form, &$form_state) {
+  public function __validate(&$form, &$form_state) {
     $a = 1;
   }
 
@@ -372,11 +373,11 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface, TrustedCa
     return ['preRenderManagedFile'];
   }
 
-  public function preRenderManagedFile($element) {
+  public function __preRenderManagedFile($element) {
     // If we already have a file, we don't want to show the upload controls.
     $a = 1;
     return ManagedFile::preRenderManagedFile($element);
-    }
+  }
 
   public static function ___processMultiple($element, FormStateInterface $form_state, $form) {
     return FileWidget::processMultiple($element, $form_state, $form);
