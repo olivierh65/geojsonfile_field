@@ -45,9 +45,9 @@ use Drupal\file\Plugin\Field\FieldType\FileItem;
  * )
  */
 
- //  *   multiple_values = false
+//  *   multiple_values = false
 
-class GeojsonFileWidget extends WidgetBase implements WidgetInterface  {
+class GeojsonFileWidget extends WidgetBase implements WidgetInterface, TrustedCallbackInterface {
 
   /**
    * The file system service.
@@ -124,6 +124,15 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface  {
     }
     $file_selected = $fid > 0;
 
+    $element['track']['fid'] = [
+      '#type' => 'hidden',
+      '#value' => $fid,
+      '#name' => 'track_fid_' . $delta,
+      '#attributes' => [
+        'id' => 'track_fid_' . $delta,
+      ],
+    ];
+    
     $element['track']['fichier'] = [
       '#type' => 'managed_file',
       '#title' => "Fichier $delta",
@@ -136,6 +145,9 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface  {
       '#default_value' => [
         'fids' => $fid,
       ],
+      '#pre_render' => [
+        [$this, 'preRenderManagedFile'],
+      ],
       '#fids' => 0,
     ];
 
@@ -145,58 +157,81 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface  {
       '#default_value' => $items[$delta]->fichier ?? null,
       '#placeholder' => 'Description de la trace',
       // '#disabled' => !$file_selected ?? true,
-      '#access' => $file_selected ?? false,
+      // '#access' => $file_selected ?? false,
       '#attributes' => [
         'id' => 'data_description_' . $delta,
       ],
-      '#required' => true,
+      '#states' => [
+        'visible' => [
+          ':input[id="track_fid_' . $delta .'"]' =>
+          ['!value' => 0],
+        ],
+      ],
       // '#access' => null !== $form_state->getValue(['field_data', $delta, 'data', 'fichier']) ? true : false,
     ];
 
-    // $element['style'] = [
-    //   '#title' => 'Global style',
-    //   '#type' => 'details',
-    //   '#open' => false,
-    //   // hide until a file is selected
-    //   '#access' => true, // $file_selected ?? false,
-    //   '#weight' => 19,
-    // ];
+    $element['style'] = [
+      '#title' => 'Global style',
+      '#type' => 'details',
+      '#open' => false,
+      // hide until a file is selected
+      // '#access' => true, // $file_selected ?? false,
+      '#states' => [
+        'visible' => [
+          [
+            '[name="field_leaflet_edit_geojsonfile_' . $delta . '_track_fichier_remove_button"]' => ['valid' => true],
+            'or',
+            '[id="data_description_' . $delta . '"]' => ['value' => 'matin'],
+          ],
+        ],
+      ],
+      '#weight' => 19,
+    ];
 
-    // $element['style']['leaflet_style'] = [
-    //   '#title' => 'Test leaflet_style',
-    //   '#type' => 'leaflet_style',
-    //   '#weight' => 1,
-    //   // '#value_callback' => [$this, 'styleUnserialize'],
-    //   '#disabled' => !$file_selected ?? true,
-    // ];
+    $element['style']['leaflet_style'] = [
+      '#title' => 'Test leaflet_style',
+      '#type' => 'leaflet_style',
+      '#weight' => 1,
+      // '#value_callback' => [$this, 'styleUnserialize'],
+      // '#disabled' => !$file_selected ?? true,
+    ];
 
-    // $element['mapping'] = [
-    //   '#title' => 'Mapping style',
-    //   '#type' => 'details',
-    //   '#open' => ((null !== $form_state->getValue("last_added")) && $delta == $form_state->getValue("last_added") ||
-    //     ((null === $form_state->getValue("last_added")) && $file_selected == true)) ? true : false,
-    //   '#prefix' => '<div id="mapping-fieldset-wrapper' . $delta . '">',
-    //   '#suffix' => '</div>',
-    //   // hide until a file is selected
-    //   '#access' => true, // $file_selected ?? false,
-    //   '#disabled' => !$file_selected ?? true,
-    //   '#weight' => 20,
-    // ];
+    $element['mapping'] = [
+      '#title' => 'Mapping style',
+      '#type' => 'details',
+      '#open' => ((null !== $form_state->getValue("last_added")) && $delta == $form_state->getValue("last_added") ||
+        ((null === $form_state->getValue("last_added")) && $file_selected == true)) ? true : false,
+      '#prefix' => '<div id="mapping-fieldset-wrapper' . $delta . '">',
+      '#suffix' => '</div>',
+      // hide until a file is selected
+      // '#access' => true, // $file_selected ?? false,
+      // '#disabled' => !$file_selected ?? true,
+      '#states' => [
+        'visible' => [
+          [
+            '[name="field_leaflet_edit_geojsonfile_' . $delta . '_track_fichier_remove_button"]' => ['valid' => true],
+            'or',
+            '[id="data_description_' . $delta . '"]' => ['value' => 'matin'],
+          ],
+        ],
+      ],
+      '#weight' => 20,
+    ];
 
-    // $element['mapping']['attribut'] = [
-    //   '#title' => 'Attribute ' . $delta + 1,
-    //   '#type' => 'details',
-    //   '#open' => false,
-    //   '#weight' => 20,
-    // ];
+    $element['mapping']['attribut'] = [
+      '#title' => 'Attribute ' . $delta + 1,
+      '#type' => 'details',
+      '#open' => false,
+      '#weight' => 20,
+    ];
 
-    // $element['mapping']['attribut']['_nb_attribut'] = [
-    //   '#type' => 'value',
-    //   '#description' => 'number of attributs for delta ' . $delta + 1,
-    //   '#value' => 0,
-    // ];
+    $element['mapping']['attribut']['_nb_attribut'] = [
+      '#type' => 'value',
+      '#description' => 'number of attributs for delta ' . $delta + 1,
+      '#value' => 0,
+    ];
     // save number of attributs mapping
-    ////// $form_state->setValue(['mapping', 'attribut', '_nb_attribut'], $element['mapping']['attribut']['_nb_attribut']['#value']);
+    $form_state->setValue(['mapping', 'attribut', '_nb_attribut'], $element['mapping']['attribut']['_nb_attribut']['#value']);
 
 
 
@@ -252,16 +287,16 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface  {
 
     for ($i = 0; $i <= $num_mappings; $i++) { */
 
-    // $element['mapping']['attribut']['attributes'] /* [$i] */ = [
-    //   '#title' => 'Style Mapping',
-    //   '#type' => 'leaflet_style_mapping',
-    //   '#cardinality' => 3,
-    //   '#multiple' => true,
-    //   '#description' => 'Mapping ' . $delta . ':',
-    //   '#value_callback' => [$this, 'mappingUnserialize'],
-    //   '#cardinality' => FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED,
-    //   '#tree' => true,
-    // ];
+    $element['mapping']['attribut']['attributes'] /* [$i] */ = [
+      '#title' => 'Style Mapping',
+      '#type' => 'leaflet_style_mapping',
+      '#cardinality' => 3,
+      '#multiple' => true,
+      '#description' => 'Mapping ' . $delta . ':',
+      '#value_callback' => [$this, 'mappingUnserialize'],
+      '#cardinality' => FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED,
+      '#tree' => true,
+    ];
 
     /*  // If there is more than one name, add the remove button.
     if ($num_mappings >= 1) {
@@ -327,8 +362,21 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface  {
   }
 
   public function validate(&$form, &$form_state) {
-    $a=1;
+    $a = 1;
   }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function trustedCallbacks() {
+    return ['preRenderManagedFile'];
+  }
+
+  public function preRenderManagedFile($element) {
+    // If we already have a file, we don't want to show the upload controls.
+    $a = 1;
+    return ManagedFile::preRenderManagedFile($element);
+    }
 
   public static function ___processMultiple($element, FormStateInterface $form_state, $form) {
     return FileWidget::processMultiple($element, $form_state, $form);
