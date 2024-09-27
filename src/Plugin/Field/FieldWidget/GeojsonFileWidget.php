@@ -57,6 +57,65 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget */ implements WidgetInt
    */
   static protected $fieldName = null;
 
+    /**
+   * The element info manager.
+   */
+  protected ElementInfoManagerInterface $elementInfo;
+
+  /**
+   * {@inheritdoc}
+   */
+  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, array $third_party_settings, ElementInfoManagerInterface $element_info) {
+    parent::__construct($plugin_id, $plugin_definition, $field_definition, $settings, $third_party_settings);
+    $this->elementInfo = $element_info;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
+    return new static($plugin_id, $plugin_definition, $configuration['field_definition'], $configuration['settings'], $configuration['third_party_settings'], $container->get('element_info'));
+  }
+
+    /**
+   * {@inheritdoc}
+   */
+  public static function defaultSettings() {
+    // recupere es settings definies dans le Field 
+    $default_settings = \Drupal::service('plugin.manager.field.field_type')->getDefaultFieldSettings('geojsonfile_field');
+
+    $set_file = [
+      'progress_indicator' => 'throbber',
+    ] + parent::defaultSettings();
+
+    return $default_settings;
+  }
+
+    /**
+   * {@inheritdoc}
+   */
+  public function extractFormValues(FieldItemListInterface $items, array $form, FormStateInterface $form_state) {
+    parent::extractFormValues($items, $form, $form_state);
+
+    // Update reference to 'items' stored during upload to take into account
+    // changes to values like 'alt' etc.
+    // @see \Drupal\file\Plugin\Field\FieldWidget\FileWidget::submit()
+    $field_name = $this->fieldDefinition->getName();
+    $field_state = static::getWidgetState($form['#parents'], $field_name, $form_state);
+    $field_state['items'] = $items->getValue();
+    static::setWidgetState($form['#parents'], $field_name, $form_state, $field_state);
+  }
+
+    /**
+   * Form API callback. Retrieves the value for the file_generic field element.
+   *
+   * This method is assigned as a #value_callback in formElement() method.
+   */
+  public static function value($element, $input, FormStateInterface $form_state) {
+    $a = 1;
+    return FileWidget::value($element, $input, $form_state);
+  }
+
   /**
    * Overrides \Drupal\Core\Field\WidgetBase::formMultipleElements().
    *
@@ -146,10 +205,25 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget */ implements WidgetInt
       '#default_value' => [
         'fids' => $fid,
       ],
-      /* '#pre_render' => [
+      '#process' => [
+        [$this, 'processManagedFile'],
+      ],
+      '#element_validate' => [
+        [$this, 'validateManagedFile'],
+      ],
+      '#pre_render' => [
         [$this, 'preRenderManagedFile'],
-      ], */
+      ],
       // '#fids' => 0,
+      '#input' => TRUE,
+      '#theme' => 'file_managed_file',
+      '#theme_wrappers' => ['form_element'],
+      '#progress_indicator' => 'throbber',
+      '#attached' => [
+        'library' => ['file/drupal.file'],
+      ],
+      '#accept' => NULL,
+      '#multiple' => FALSE,
     ];
 
     $element['track']['description'] = [
@@ -205,9 +279,9 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget */ implements WidgetInt
       '#prefix' => '<div id="mapping-fieldset-wrapper' . $delta . '">',
       '#suffix' => '</div>',
       // hide until a file is selected
-      // '#access' => true, // $file_selected ?? false,
+      '#access' => $file_selected ?? false,
       // '#disabled' => !$file_selected ?? true,
-      '#states' => [
+      /* '#states' => [
         'visible' => [
           [
             '[name="field_leaflet_edit_geojsonfile_' . $delta . '_track_fichier_remove_button"]' => ['valid' => true],
@@ -215,7 +289,7 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget */ implements WidgetInt
             '[id="data_description_' . $delta . '"]' => ['value' => 'matin'],
           ],
         ],
-      ],
+      ], */
       '#weight' => 20,
     ];
 
@@ -469,14 +543,6 @@ class GeojsonFileWidget extends WidgetBase /* FileWidget */ implements WidgetInt
   }
 
 
-  /**
-   * {@inheritdoc}
-   */
-  public static function defaultSettings() {
-    // recupere es settings definies dans le Field 
-    $default_settings = \Drupal::service('plugin.manager.field.field_type')->getDefaultFieldSettings('geojsonfile_field');
-    return $default_settings;
-  }
 
   /**
    * {@inheritdoc}
