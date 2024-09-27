@@ -13,6 +13,9 @@ use Drupal\Core\Field\FieldItemInterface;
 use Drupal\Core\Render\Element\File;
 use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\Component\Utility\Environment;
+use Drupal\Component\Render\PlainTextOutput;
+use Drupal\file\Validation\FileValidatorSettingsTrait;
+
 
 /**
  * Plugin implementation of the 'Geojson' field type.
@@ -29,6 +32,8 @@ use Drupal\Component\Utility\Environment;
  */
 //default_formatter = "leaflet_edit_formatter",
 class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
+
+  use FileValidatorSettingsTrait;
 
   /**
    * {@inheritdoc}
@@ -390,6 +395,56 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
   public function preSave() {
     $a=1;
     parent::preSave();
+  }
+
+   /**
+   * Determines the URI for a file field.
+   *
+   * @param array $data
+   *   An array of token objects to pass to Token::replace().
+   *
+   * @return string
+   *   An unsanitized file directory URI with tokens replaced. The result of
+   *   the token replacement is then converted to plain text and returned.
+   *
+   * @see \Drupal\Core\Utility\Token::replace()
+   */
+  public function getUploadLocation($data = []) {
+    return static::doGetUploadLocation($this->getSettings(), $data);
+  }
+
+    /**
+   * Determines the URI for a file field.
+   *
+   * @param array $settings
+   *   The array of field settings.
+   * @param array $data
+   *   An array of token objects to pass to Token::replace().
+   *
+   * @return string
+   *   An unsanitized file directory URI with tokens replaced. The result of
+   *   the token replacement is then converted to plain text and returned.
+   *
+   * @see \Drupal\Core\Utility\Token::replace()
+   */
+  protected static function doGetUploadLocation(array $settings, $data = []) {
+    $destination = trim($settings['file_directory'], '/');
+
+    // Replace tokens. As the tokens might contain HTML we convert it to plain
+    // text.
+    $destination = PlainTextOutput::renderFromHtml(\Drupal::token()->replace($destination, $data));
+    return $settings['uri_scheme'] . '://' . $destination;
+  }
+
+    /**
+   * Retrieves the upload validators for a file field.
+   *
+   * @return array
+   *   An array suitable for passing to file_save_upload() or the file field
+   *   element's '#upload_validators' property.
+   */
+  public function getUploadValidators() {
+    return $this->getFileUploadValidators($this->getSettings());
   }
 
 }
