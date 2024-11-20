@@ -1,0 +1,9 @@
+
+
+geojsonfile_field.testForm:
+  path: '/geojsonfile_field/testform'
+  defaults:
+    _form: '\Drupal\geojsonfile_field\Form\TestForm'
+    _title: 'Test Form'
+  requirements:
+    _access: 'TRUE'
