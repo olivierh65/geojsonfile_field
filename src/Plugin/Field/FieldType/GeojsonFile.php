@@ -138,6 +138,12 @@ class GeoJsonFile extends FieldItemBase implements FieldItemInterface {
       '#tree' => true,
     ];
 
+    $element['complex'] = [
+      '#title' => 'Complex',
+      '#type' => 'custom_complex_form_element',
+      '#weight' => 8,
+    ];
+
     $element['track'] = [
       '#title' => 'Track file',
       '#type' => 'details',
