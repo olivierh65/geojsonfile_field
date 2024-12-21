@@ -7,6 +7,7 @@ use Drupal\Core\Field\WidgetBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Component\Utility\NestedArray;
 use \Drupal\file\Entity\File;
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
 
 
 /**
@@ -60,6 +61,12 @@ class TestGeojsonFileWidget extends WidgetBase {
     }
 
 
+    $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
+    $element['#multiple'] = true;
+    $element['#tree'] = true;
+    $element['#max_delta'] = 0;
+
+
     $element['file'] = [
       '#type' => 'geojson_managed_file',
       '#title' => t('GeoJSON File'),
@@ -91,7 +98,7 @@ class TestGeojsonFileWidget extends WidgetBase {
     $element['mapping'] = [
       '#type' => 'details',
       '#title' => 'Mappings',
-      '#prefix' => '<div id="mapping-details-wrapper">',
+      '#prefix' => '<div id="mapping-details-wrapper-' . $delta . '">',
       '#suffix' => '</div>',
       '#weight' => 30,
     ];
@@ -99,12 +106,13 @@ class TestGeojsonFileWidget extends WidgetBase {
     foreach ($geojson_mapping as $index => $attribut) {
 
       $trigger = $form_state->getTriggeringElement();
-      if (isset($trigger["#attributes"]["class"]) &&
-          (in_array("mapping-add-button", $trigger["#attributes"]["class"]))) {
-            $element['mapping']['#open']=true;
-      }
-      else {
-        $element['mapping']['#open']=false;
+      if (
+        isset($trigger["#attributes"]["class"]) &&
+        (in_array("mapping-add-button", $trigger["#attributes"]["class"]))
+      ) {
+        $element['mapping']['#open'] = true;
+      } else {
+        $element['mapping']['#open'] = false;
       }
       $attribut_options = $this->getAttributeOptions($index, $delta, $form_state);
       $attribut_default = null;
@@ -181,7 +189,7 @@ class TestGeojsonFileWidget extends WidgetBase {
           '@value' => $value_default,
           '@index' => $index + 1,
         ]),
-        '#name' => 'mapping-' . $index,
+        '#name' => 'mapping-' . $delta . '-' . $index,
         '#weight' => 30 + $index,
         '#theme' => 'geojson_mapping_item', // Thème Twig personnalisé
         '#open' => false,
@@ -191,11 +199,11 @@ class TestGeojsonFileWidget extends WidgetBase {
         'remove_button' => [
           '#type' => 'submit',
           '#value' => t('Remove'),
-          '#name' => 'remove_' . $index,
-          '#submit' => [[static::class, 'removeMapping']],
+          '#name' => 'remove_' . $delta . '-' . $index,
+          '#submit' => [[$this, 'removeMapping']],
           '#ajax' => [
             'callback' => [static::class, 'updateMappingCallback'],
-            'wrapper' => 'mapping-details-wrapper',
+            'wrapper' => 'mapping-details-wrapper-' . $delta,
           ],
           '#attributes' => [
             'class' => ['mapping-remove-button'],
@@ -251,10 +259,10 @@ class TestGeojsonFileWidget extends WidgetBase {
       '#type' => 'submit',
       '#value' => t('Add Mapping'),
       '#name' => 'add_more_' . $delta,
-      '#submit' => [[static::class, 'addMapping']],
+      '#submit' => [[$this, 'addMapping']],
       '#ajax' => [
         'callback' => [static::class, 'updateMappingCallback'],
-        'wrapper' => 'mapping-details-wrapper',
+        'wrapper' => 'mapping-details-wrapper-' . $delta,
       ],
       '#attributes' => [
         'class' => ['mapping-add-button'],
@@ -302,7 +310,10 @@ class TestGeojsonFileWidget extends WidgetBase {
   /**
    * Submit handler for adding a mapping group.
    */
-  public static function addMapping(array &$form, FormStateInterface $form_state) {
+  public function addMapping(array &$form, FormStateInterface $form_state) {
+    // Ne pas utiliser une fi=onction static
+    // $delta dans set et get ne semble pas etre utilisé
+
     // Récupérez le delta (index du champ actuel).
     $trigger = $form_state->getTriggeringElement();
     $delta = $trigger['#parents'][1];
@@ -320,7 +331,10 @@ class TestGeojsonFileWidget extends WidgetBase {
   /**
    * Submit handler for removing a mapping group.
    */
-  public static function removeMapping(array &$form, FormStateInterface $form_state) {
+  public function removeMapping(array &$form, FormStateInterface $form_state) {
+    // Ne pas utiliser une fi=onction static
+    // $delta dans set et get ne semble pas etre utilisé
+
     // Récupérez le delta et l'index à supprimer.
     $trigger = $form_state->getTriggeringElement();
     $delta = $trigger['#parents'][1];
@@ -329,7 +343,13 @@ class TestGeojsonFileWidget extends WidgetBase {
     // Supprimez l'attribut correspondant.
     $geojson_mapping = $form_state->get(['geojson_mapping', $delta]) ?? [];
     unset($geojson_mapping[$index]);
-    $form_state->set(['geojson_mapping', $delta], array_values($geojson_mapping)); // Réindexation.
+    
+    //Supprime l'element de form_state
+    $fields = $form_state->getValue(array_slice($trigger['#parents'], 0, 3));
+    unset($fields[$index]);
+    $form_state->setValue(array_slice($trigger['#parents'], 0, 3), $fields);
+    // TODO - faut-il re-indexer ???
+    $form_state->set(['geojson_mapping', $delta], /* array_values */ ($geojson_mapping)); // Réindexation.
 
     // Marquez le formulaire pour reconstruction.
     $form_state->setRebuild();

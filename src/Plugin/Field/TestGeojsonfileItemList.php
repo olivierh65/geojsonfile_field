@@ -78,6 +78,10 @@ class TestGeojsonfileItemList extends FieldItemList {
 
         $vals = [];
         foreach ($values as $delta => $value) {
+            if (! is_array($value)) {
+            // ne garde que les tableaux
+                continue;
+            }
             // Récupérer l'ID du fichier.
             $file_id = !empty($value['file']) && is_array($value['file']) ? reset($value['file']) : NULL;
 
