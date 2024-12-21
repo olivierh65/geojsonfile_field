@@ -1,0 +1,19 @@
+{# <pre>{{ dump(element) }}</pre> #}
+
+<div class="mapping-item-wrapper">
+	<div class="mapping-header">
+		<div class="mapping-remove">
+			{{ element['remove_button'] }}
+		</div>
+	</div>
+	<div class="mapping-attribut">
+		{{ element['attribut'] }}
+		{{ element['value'] }}
+		{{ element['label'] }}
+	</div>
+	<div class="mapping-content">
+		<hr>
+		{{ element['detail_style'] }}
+		{{ children }}
+	</div>
+</div>

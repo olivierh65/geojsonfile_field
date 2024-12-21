@@ -90,7 +90,7 @@ class TestGeojsonfileItemList extends FieldItemList {
                 foreach ($value['mapping'] as $index => $mapping_entry) {
                     if (is_int($index)) {
                         // ignore le niveau intermediaire 
-                        $mapping[$index] = $mapping_entry['mapping-' . $index];
+                        $mapping[$index] = $mapping_entry;
                     }
                 }
             }

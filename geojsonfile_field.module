@@ -23,3 +23,13 @@ function geojsonfile_field_help($route_name, RouteMatchInterface $route_match) {
   }
 }
 
+/**
+ * Implements hook_theme().
+ */
+function geojsonfile_field_theme() {
+  return [
+    'geojson_mapping_item' => [
+      'render element' => 'element',
+    ],
+  ];
+}

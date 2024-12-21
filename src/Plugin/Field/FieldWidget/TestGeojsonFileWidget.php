@@ -97,21 +97,23 @@ class TestGeojsonFileWidget extends WidgetBase {
     ];
 
     foreach ($geojson_mapping as $index => $attribut) {
-      $element['mapping'][$index] = [
-        '#type' => 'details',
-        '#title' => 'Mapping ' . $index + 1,
-        '#name' => 'mapping-' . $index,
-        '#weight' => 30 + $index,
-      ];
 
       $trigger = $form_state->getTriggeringElement();
+      if (isset($trigger["#attributes"]["class"]) &&
+          (in_array("mapping-add-button", $trigger["#attributes"]["class"]))) {
+            $element['mapping']['#open']=true;
+      }
+      else {
+        $element['mapping']['#open']=false;
+      }
       $attribut_options = $this->getAttributeOptions($index, $delta, $form_state);
       $attribut_default = null;
+      $value_default = null;
       $value_options = [];
 
       if ($trigger !== null) {
         $fieldname = $trigger['#parents'][0];
-        if ($form_state->getValue([$fieldname, $delta, 'mapping', $index, 'mapping-' . $index, 'attribut']) == null) {
+        if ($form_state->getValue([$fieldname, $delta, 'mapping', $index, 'attribut']) == null) {
           // mapping pas encore cree
           // Recupere les valeurs precedement sauvées
           if (isset(($value->mapping)[$index])) {
@@ -126,7 +128,7 @@ class TestGeojsonFileWidget extends WidgetBase {
           }
         } else {
           // mapping deja cree
-          $attribut_default = $form_state->getValue([$fieldname, $delta, 'mapping', $index, 'mapping-' . $index, 'attribut']);
+          $attribut_default = $form_state->getValue([$fieldname, $delta, 'mapping', $index, 'attribut']);
           if (!empty($attribut_default)) {
             $attr_saved = null;
             if (isset(($value->mapping)[$index])) {
@@ -155,8 +157,7 @@ class TestGeojsonFileWidget extends WidgetBase {
           if (!empty(($value->mapping)[$index]['attribut'])) {
             $attribut_default = ($value->mapping)[$index]['attribut'];
             $value_default = ($value->mapping)[$index]['value'];
-          }
-          else {
+          } else {
             $attribut_default = null;
             $value_default = null;
           }
@@ -169,10 +170,37 @@ class TestGeojsonFileWidget extends WidgetBase {
       }
       $value_options = $this->getValueOptions($attribut_default, $index, $delta, $form_state);
       if ($value_default == null) {
-        $value_default = $attribut_default = array_key_first($value_options);
+        $value_default = array_key_first($value_options);
       }
 
-      $element['mapping'][$index]['mapping-' . $index] = [
+
+      $element['mapping'][$index] = [
+        '#type' => 'details',
+        '#title' => t('Mapping @attribut == @value (@index)', [
+          '@attribut' => $attribut_default,
+          '@value' => $value_default,
+          '@index' => $index + 1,
+        ]),
+        '#name' => 'mapping-' . $index,
+        '#weight' => 30 + $index,
+        '#theme' => 'geojson_mapping_item', // Thème Twig personnalisé
+        '#open' => false,
+        '#attributes' => [
+          'class' => ['mapping-item'],
+        ],
+        'remove_button' => [
+          '#type' => 'submit',
+          '#value' => t('Remove'),
+          '#name' => 'remove_' . $index,
+          '#submit' => [[static::class, 'removeMapping']],
+          '#ajax' => [
+            'callback' => [static::class, 'updateMappingCallback'],
+            'wrapper' => 'mapping-details-wrapper',
+          ],
+          '#attributes' => [
+            'class' => ['mapping-remove-button'],
+          ],
+        ],
         'attribut' => [
           '#type' => 'select',
           '#title' => t('Attribut'),
@@ -188,9 +216,6 @@ class TestGeojsonFileWidget extends WidgetBase {
               'message' => t('Verifying entry...'),
             ],
           ],
-          '#element_validate' => [
-            [$this, 'validateCustomWidget'],
-          ],
         ],
         'value' => [
           '#type' => 'select',
@@ -199,57 +224,52 @@ class TestGeojsonFileWidget extends WidgetBase {
           '#default_value' => $value_default ?? null,
           '#prefix' => '<div id="' . $wrapper_id . '-value-' . $index . '">',
           '#suffix' => '</div>',
-          '#element_validate' => [
-            [$this, 'validateCustomWidget'],
-          ],
         ],
         'label' => [
           '#type' => 'textfield',
           '#title' => t('Label'),
           '#default_value' => $attribut['label'] ?? '',
         ],
-        'style' => [
-          '#type' => 'leaflet_style',
-          '#title' => t('Leaflet Style'),
-          '#default_value' => $attribut['style'] ?? [],
-        ],
-        'remove' => [
-          '#type' => 'submit',
-          '#value' => t('Remove'),
-          '#name' => 'remove_' . $index,
-          '#submit' => [[static::class, 'removeMapping']],
-          '#ajax' => [
-            'callback' => [static::class, 'updateMappingCallback'],
-            'wrapper' => 'mapping-details-wrapper',
+        'detail_style' => [
+          '#type' => 'details',
+          '#open' => false,
+          '#title' => t('Style pour @attribut == @value', [
+            '@attribut' => $attribut_default,
+            '@value' => $value_default,
+          ]),
+          'style' => [
+            '#type' => 'leaflet_style',
+            '#title' => t('Leaflet Style'),
+            '#default_value' => $attribut['detail_style']['style'] ?? [],
           ],
         ],
+
       ];
     }
 
     $element['mapping']['add_more'] = [
       '#type' => 'submit',
-      '#value' => t('Add More'),
+      '#value' => t('Add Mapping'),
       '#name' => 'add_more_' . $delta,
       '#submit' => [[static::class, 'addMapping']],
       '#ajax' => [
         'callback' => [static::class, 'updateMappingCallback'],
         'wrapper' => 'mapping-details-wrapper',
       ],
+      '#attributes' => [
+        'class' => ['mapping-add-button'],
+      ],
     ];
+
+    // Définir un thème personnalisé pour cet élément.
+    $element['#theme'] = 'geojsonfile_field_widget_theme';
+
+    // Ajouter des variables pour le thème.
+    $element['#attached']['library'][] = 'geojsonfile_field/widget_styles';
 
     return $element;
   }
 
-  /**
-   * Validation callback.
-   */
-  public function validateCustomWidget(&$element, FormStateInterface $form_state, &$complete_form) {
-    $value = $form_state->getValue($element['#parents']);
-
-    if ($value === 'AP_') {
-      $form_state->setError($element, $this->t('The value "AP" is not allowed.'));
-    }
-  }
 
   /**
    * Get options for the attribute select field.
@@ -335,7 +355,7 @@ class TestGeojsonFileWidget extends WidgetBase {
   public function updateValueOptions(array &$form, FormStateInterface $form_state) {
     // Récupérer les parents du champ déclencheur.
     $trigger = $form_state->getTriggeringElement();
-    $parents = array_slice($trigger['#array_parents'], 0, 6);
+    $parents = array_slice($trigger['#array_parents'], 0, 5);
     $delta = $trigger['#parents'][1];
     $index = $trigger['#parents'][3];
 
