@@ -24,6 +24,27 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
 class TestGeojsonFileWidget extends WidgetBase {
 
   /**
+ * {@inheritdoc}
+ */
+protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
+  $elements = parent::formMultipleElements($items, $form, $form_state);
+
+  $elements['#title']='Liste des fichiers';
+  
+  // Personnaliser le bouton "Add more".
+  $elements['add_more']['#value'] = $this->t('Ajouter un fichier geojson');
+
+  // Parcourir chaque delta et modifier le bouton "Remove".
+  foreach ($elements as $key => &$element) {
+    if (is_numeric($key) && isset($element['_actions']['delete'])) {
+      $element['_actions']['delete']['#value'] = $this->t('Supprimer ce fichier');
+    }
+  }
+  return $elements;
+}
+
+
+  /**
    * {@inheritdoc}
    */
   public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
@@ -64,7 +85,9 @@ class TestGeojsonFileWidget extends WidgetBase {
     $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
     $element['#multiple'] = true;
     $element['#tree'] = true;
-    $element['#max_delta'] = 0;
+    // Nombre maxi de fichiers
+    $element['#max_delta'] = 10;
+    $element['#title'] = 'Fichier N° ' . $delta + 1;
 
 
     $element['file'] = [
