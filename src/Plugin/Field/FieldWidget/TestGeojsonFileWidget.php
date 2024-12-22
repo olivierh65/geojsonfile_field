@@ -24,24 +24,27 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
 class TestGeojsonFileWidget extends WidgetBase {
 
   /**
- * {@inheritdoc}
- */
-protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
-  $elements = parent::formMultipleElements($items, $form, $form_state);
+   * {@inheritdoc}
+   */
+  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
+    $elements = parent::formMultipleElements($items, $form, $form_state);
 
-  $elements['#title']='Liste des fichiers';
-  
-  // Personnaliser le bouton "Add more".
-  $elements['add_more']['#value'] = $this->t('Ajouter un fichier geojson');
+    $elements['#title'] = 'Liste des fichiers';
+    $elements['#attributes'] = [
+      'class' => ['geojsonfiled_liste_fichiers'],
+    ];
 
-  // Parcourir chaque delta et modifier le bouton "Remove".
-  foreach ($elements as $key => &$element) {
-    if (is_numeric($key) && isset($element['_actions']['delete'])) {
-      $element['_actions']['delete']['#value'] = $this->t('Supprimer ce fichier');
+    // Personnaliser le bouton "Add more".
+    $elements['add_more']['#value'] = $this->t('Ajouter un fichier geojson');
+
+    // Parcourir chaque delta et modifier le bouton "Remove".
+    foreach ($elements as $key => &$element) {
+      if (is_numeric($key) && isset($element['_actions']['delete'])) {
+        $element['_actions']['delete']['#value'] = $this->t('Supprimer ce fichier');
+      }
     }
+    return $elements;
   }
-  return $elements;
-}
 
 
   /**
@@ -81,6 +84,7 @@ protected function formMultipleElements(FieldItemListInterface $items, array &$f
       }
     }
 
+    $file_selected = isset($form_state->getValue($items->getName())[$delta]['file'][0]) ? $form_state->getValue($items->getName())[$delta]['file'][0] : -1;
 
     $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
     $element['#multiple'] = true;
@@ -88,7 +92,6 @@ protected function formMultipleElements(FieldItemListInterface $items, array &$f
     // Nombre maxi de fichiers
     $element['#max_delta'] = 10;
     $element['#title'] = 'Fichier N° ' . $delta + 1;
-
 
     $element['file'] = [
       '#type' => 'geojson_managed_file',
@@ -101,15 +104,21 @@ protected function formMultipleElements(FieldItemListInterface $items, array &$f
         'file_validate_extensions' => ['geojson jpg pdf'],  // Pour restreindre les extensions de fichier (optionnel)
       ],
       '#widget_class' => static::class, // Ajout d'une référence à la classe.
-      '#attributes' => [
-        'accept' => '.geojson,.jpeg,.pdf'
-      ],
+      '#accept' => '.geojson',
     ];
 
     $element['style_global'] = [
       '#type' => 'details',
       '#title' => 'Style Global',
       '#weight' => 20,
+      /* '#states' => [
+        'visible' => [
+          // Montre cet élément lorsque le champ managed_file contient un fichier.
+          // Exemple : name="field_aab[2][file][fids]"
+          ':input[name="' . $items->getName() . '[' . $delta . '][file][fids]"]' => ['filled' => TRUE],
+        ],
+      ], */
+      '#access' => $file_selected > 0 ? true : false,
     ];
 
     $element['style_global']['style'] = [
@@ -124,6 +133,13 @@ protected function formMultipleElements(FieldItemListInterface $items, array &$f
       '#prefix' => '<div id="mapping-details-wrapper-' . $delta . '">',
       '#suffix' => '</div>',
       '#weight' => 30,
+      '#states' => [
+        'visible' => [
+          // Montre cet élément lorsque le champ managed_file contient un fichier.
+          // Exemple : name="field_aab[2][file][fids]"
+          ':input[name="' . $items->getName() . '[' . $delta . '][file][fids]"]' => ['filled' => TRUE],
+        ],
+      ],
     ];
 
     foreach ($geojson_mapping as $index => $attribut) {
@@ -366,7 +382,7 @@ protected function formMultipleElements(FieldItemListInterface $items, array &$f
     // Supprimez l'attribut correspondant.
     $geojson_mapping = $form_state->get(['geojson_mapping', $delta]) ?? [];
     unset($geojson_mapping[$index]);
-    
+
     //Supprime l'element de form_state
     $fields = $form_state->getValue(array_slice($trigger['#parents'], 0, 3));
     unset($fields[$index]);

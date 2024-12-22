@@ -67,7 +67,7 @@ class TestGeojsonfile extends FieldItemBase {
    * {@inheritdoc}
    */
   public function isEmpty() {
-    $empty = empty($this->get('file')->getValue()) && empty($this->get('style')->getValue());
+    $empty = empty($this->get('file')->getValue());
     return $empty;
   }
 
