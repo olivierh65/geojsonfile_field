@@ -73,7 +73,7 @@ class TestGeojsonfileItemList extends FieldItemList {
     /**
      * Met en forme les valeurs saisies dans le widget
      */
-    public function getValues($values) {
+    public function getGeojsonfieldValues($values) {
         // $values = parent::getValue();
 
         $vals = [];

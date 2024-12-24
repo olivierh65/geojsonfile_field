@@ -3,4 +3,11 @@ widget_styles:
   css:
     theme:
       css/widget_styles.css: {}
-      
+
+update_value:
+  version: 1.x
+  js:
+    js/updateValue.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupalSettings
