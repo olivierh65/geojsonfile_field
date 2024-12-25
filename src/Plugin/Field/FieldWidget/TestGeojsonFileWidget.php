@@ -77,15 +77,17 @@ class TestGeojsonFileWidget extends WidgetBase {
         $fid = reset($form_state->getValue($items->getName())[$delta]['file']);
       } else {
         $fid = -1;
+        $form_state->set(['file_status', $delta], 0);
       }
+      // Récupérer les attributs du fichier GeoJSON.
       if ($fid > 0) {
         $attribs = static::getGeojsonAttributs($form, $form_state, $fid);
         $form_state->set(['geojson_attributs', $delta], $attribs);
+        $form_state->set(['file_status', $delta], 1);
       }
     }
 
-    $file_selected = isset($form_state->getValue($items->getName())[$delta]['file'][0]) ? $form_state->getValue($items->getName())[$delta]['file'][0] : -1;
-    
+    // Définir les propriétés du champ.    
     $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
     $element['#multiple'] = true;
     $element['#tree'] = true;
@@ -93,10 +95,6 @@ class TestGeojsonFileWidget extends WidgetBase {
     $element['#max_delta'] = 10;
     $element['#title'] = 'Fichier N° ' . $delta + 1;
 
-    $element['test'] = [
-      '#type' => 'container',
-      '#title' => t('Test'),
-    ];
     $element['file'] = [
       '#type' => 'geojson_managed_file',
       '#title' => t('GeoJSON File'),
@@ -115,26 +113,16 @@ class TestGeojsonFileWidget extends WidgetBase {
       ],
     ];
 
-   
+
     // Champ caché pour stocker l'état du fichier.
     $element['file_upload_status'] = [
-      '#type' => 'textfield',
-      '#default_value' => $form_state->getValue(['field_aab',$delta,'file_upload_status'], '0'),
-      '#value' => 0,
+      '#type' => 'hidden',
+      '#default_value' => $form_state->get(['file_status', $delta]) ?? 0,
+      '#value' => $form_state->get(['file_status', $delta]) ?? 0,
       '#attributes' => [
         'class' => ['file-upload-status-' . $delta],
         'id' => 'file-upload-status-id',
       ],
-      /* '#element_validate' => [
-        [$this, 'validateMyField'],
-      ], */
-    ];
-
-    $element['checkbox'] = [
-      '#type' => 'checkbox',
-      '#title' => t('Style Global pour tester'),
-      '#prefix' => '<div id="geojsonfile_id[' . $delta . ']">',
-      '#suffix' => '</div>',
     ];
 
     $element['style_global'] = [
@@ -146,21 +134,7 @@ class TestGeojsonFileWidget extends WidgetBase {
       '#states' => [
         'visible' => [
           // Montre cet élément lorsque le champ managed_file contient un fichier.
-          // Exemple : name="field_aab[2][file][fids]"
-          // ':input[name="' . $items->getName() . '[' . $delta . '][file][fids]"]' => ['value' => TRUE],
-          // Affiche le style lorsque le bouton remove est visible ==> fichier chargé
-          // Pas reussi avec les autres champs :-(
-          // '[name="' . $items->getName() . '_' . $delta . '_file_remove_button"]' => ['visible' => TRUE],
-          // 'or',
-          // '[name="edit-field-aab-0-file-remove-button"]' => ['visible' => TRUE],
-          // 'or',
-          // '[data-drupal-selector="edit-field-aab-0-file-remove-button"]' => ['visible' => TRUE],
-          // 'or',
-          // '#edit-field-aab-0-file-remove-button--a4I6eAcLYFA' => ['visible' => TRUE],
-          // 'or',
-          // '[name="field_aab[0][file][fids]"]' => ['!value' => ''],
-          // 'or',
-          '[name="field_aab[0][file_upload_status]"]' => ['value' => '1'],
+          '[name="' . $items->getName() . '[' . $delta . '][file_upload_status]"]' => ['value' => '1'],
         ],
       ],
       // '#access' => $file_selected > 0 ? true : false,
@@ -181,17 +155,7 @@ class TestGeojsonFileWidget extends WidgetBase {
       '#weight' => 30,
       '#states' => [
         'visible' => [
-          // Montre cet élément lorsque le champ managed_file contient un fichier.
-          // Exemple : name="field_aab[2][file][fids]"
-          // '[name="field_aab_0_file_remove_button"]' => ['visible' => TRUE],
-          // ':input[name="' . $items->getName() . '[' . $delta . '][file][fids]"]' => ['checked' => TRUE],
-          // '[name="' . $items->getName() . '[' . $delta . '][file][fids]"]' => ['value' => TRUE],
-          // Affiche les mappings lorsque le bouton remove est visible ==> fichier chargé
-          // Pas reussi avec les autres champs :-(
-          // '[name="' . $items->getName() . '_' . $delta . '_file_remove_button"]' => ['visible' => TRUE],
-          '[name="field_aab[0][checkbox]"]' => ['checked' => TRUE],
-          'or',
-          '[name="field_aab[0][file_upload_status]"]' => ['value' => '1'],
+          '[name="' . $items->getName() . '[' . $delta . '][file_upload_status]"]' => ['value' => '1'],
         ],
       ],
     ];
@@ -375,9 +339,9 @@ class TestGeojsonFileWidget extends WidgetBase {
     $form_state->setValue($element['#parents']['#value'], $form_state->getValue([$element['#parents'][0], $element['#parents'][1], 'file_upload_status']));
     // $element['#value']=$form_state->getValue([$element['#parents'][0], $element['#parents'][1], 'file_upload_status']);
     if ($value < 0) {
-        $form_state->setError($element, $this->t('Value must be positive.'));
+      $form_state->setError($element, $this->t('Value must be positive.'));
     }
-}
+  }
 
   public function updateStyleGlobalCallback(array &$form, FormStateInterface $form_state) {
     // Logique pour mettre à jour le champ 'style_global'
@@ -519,6 +483,11 @@ class TestGeojsonFileWidget extends WidgetBase {
     foreach ($vals as $delta => $value) {
       // Définir les valeurs extraites dans l'objet $items.
       $items[$delta]->setValue($value);
+      if (isset($value['file']) && $value['file'] > 0) {
+        $form_state->set(['file_status', $delta], 1);
+      } else {
+        $form_state->set(['file_status', $delta], 0);
+      }
     }
   }
 

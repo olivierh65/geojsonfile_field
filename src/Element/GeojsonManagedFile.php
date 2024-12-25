@@ -22,76 +22,6 @@ use Drupal\Core\Form\FormHelper;
  */
 class GeojsonManagedFile extends ManagedFile {
 
-    /**
-     * {@inheritdoc}
-     */
-    public function ___getInfo() {
-        $info = parent::getInfo();
-
-        $info['#element_validate'] = [
-            [$this, 'geojsonValidateManagedFile'],
-        ];
-        $info['#process'] = [
-            [$this, 'geojsonprocessManagedFile'],
-        ];
-
-        return $info;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function geojsonUploadAjaxCallback(&$form, FormStateInterface &$form_state, Request $request) {
-        $response = ManagedFile::uploadAjaxCallback($form, $form_state, $request);
-        // $response->addCommand(new AlertCommand('Hello!!!'));
-
-        // Retourner le formulaire complet.
-
-        return $response;
-    }
-
-    public function geojsonValidateManagedFile(&$element, FormStateInterface $form_state, &$complete_form) {
-        ManagedFile::validateManagedFile($element, $form_state, $complete_form);
-
-        $frm_base = array_slice($element['#parents'], 0, 2);
-        if (count($element['#value']["fids"]) > 0) {
-            $form_state->setValue(array_merge($frm_base, ['style_global', '#access']), true);
-        } else {
-            $form_state->setValue(array_merge($frm_base, ['style_global', '#access']), false);
-        }
-    }
-
-    public function geojsonProcessManagedFile(&$element, FormStateInterface $form_state, &$complete_form) {
-        $element = ManagedFile::processManagedFile($element, $form_state, $complete_form);
-
-        $element['upload_button']['#ajax']['callback'] = [$this, 'geojsonUploadAjaxCallback'];
-
-        return $element;
-    }
-
-    /* public static function processManagedFile(&$element, FormStateInterface $form_state, &$complete_form) {
-        $element = parent::processManagedFile($element, $form_state, $complete_form);
-
-        // Ajouter la mise à jour du champ caché après le téléchargement du fichier.
-        $fid = $element['#value']['fids'] ?? [];
-        if (!empty($fid)) {
-            // Trouver le champ caché correspondant.
-            // field_aab[0][file_upload_status]
-            $delta = $element['#attributes']['data-delta'] ?? null;
-            if ($delta !== null) {
-                // Mettre à jour la valeur dans $form_state.
-                $hidden_field_name = ['field_aab',$delta,'file_upload_status'];
-                $form_state->setValue($hidden_field_name, '1');
-
-                // Mettre à jour également dans $element pour qu'il soit rendu avec la nouvelle valeur.
-                if (isset($complete_form['field_aab']['widget'][$delta]['file_upload_status'])) {
-                    $complete_form['field_aab']['widget'][$delta]['file_upload_status']['#value'] = '1';
-                }
-            }
-        }
-
-        return $element;
-    } */
 
     /**
      * Overrides the uploadAjaxCallback to update additional form elements.
@@ -104,14 +34,20 @@ class GeojsonManagedFile extends ManagedFile {
         $delta = $trigger['#parents'][1];
         $field_name = $trigger['#parents'][0];
 
+        // Check if the file field has a value.
         $fids = $form_state->getValue([$field_name, $delta, 'file', 'fids']) ?? null;
         if (isset($fids) && is_array($fids) && count($fids) > 0) {
+            // Set the file status to 1.
             $file_status = 1;
+            // Set the file status in the form state.
+            $form_state->set(['file_status', $delta], 1);
         } else {
             $file_status = 0;
+            $form_state->set(['file_status', $delta], 0);
         }
 
-        $response->addCommand(new InvokeCommand(NULL, 'updateValue', ['#file-upload-status-id', $file_status]));
+        // Add an AJAX command to update the file status.
+        $response->addCommand(new InvokeCommand(NULL, 'updateValue', ['.file-upload-status-' . $delta, $file_status]));
 
         return $response;
     }
