@@ -1,0 +1,44 @@
+.mapping-item {
+  position: relative;
+}
+
+.mapping-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+}
+
+.mapping-attribut {
+  position: relative;
+    top: initial;
+    left: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mapping-remove {
+  margin-left: auto;
+}
+
+.mapping-remove-button {
+  border-radius: 2em !important;
+  height: 2em !important;
+  font-size: 0.8em !important;
+  padding: revert !important;
+  position: absolute;
+  top: 0px;
+  left: calc(60%);
+}
+
+.mapping-add-button {
+  border-radius: 2em !important;
+  height: 2.5em !important;
+  font-size: 1em !important;
+}
+
+.mapping-content {
+  margin-top: 10px;
+}
+

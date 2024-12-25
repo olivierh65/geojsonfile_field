@@ -49,182 +49,6 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
    */
   static protected $fieldName = null;
 
-  public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
-
-    if (static::$fieldName == null) {
-      static::$fieldName=$this->fieldDefinition->getName();
-    }
-    
-    $element = [];
-    $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
-    $element['#multiple'] = true;
-    $element['#tree'] = true;
-    $element['#max_delta'] = 0;
-
-
-    $element['data'] = [
-        '#title' => 'Data ' . $delta,
-        '#type' => 'details',
-        '#open' => true,
-        '#weight' => 10,
-      ];
-    $element['data']['fichier'] = [
-      '#type' => 'managed_file',
-      '#title' => "Fichier $delta",
-      '#upload_validators' =>  [
-        'file_validate_extensions' => ['geojson'],
-        'file_validate_size' => [Environment::getUploadMaxSize()],
-      ],
-      '#default_value' => [
-        'fids' => $items[$delta]->get('target_id')->getCastedValue() ?? 0
-      ],
-      '#fids' => 0,
-      '#multiple' => false,
-    ];
-
-    $element['data']['description'] = [
-      '#type' => 'textfield',
-      '#title' => t('Description'),
-      '#default_value' => $items[$delta]->fichier,
-      '#placeholder' => 'Description de la trace',
-      '#attributes' => [
-        'id' => 'data_description_' . $delta,
-      ],
-      // '#access' => null !== $form_state->getValue(['field_data', $delta, 'data', 'fichier']) ? true : false,
-    ];
-
-    if (isset($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'])) {
-      $file_selected = $form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0] > 0;
-    } else {
-      $file_selected = false;
-    }
-   
-
-    $element['fichier']['style'] = [
-      '#title' => 'Global style',
-      '#type' => 'details',
-      '#open' => false,
-      // hide until a file is selected
-      '#access' => $file_selected ?? false,
-      '#weight' => 19,
-    ];
-
-    $element['fichier']['style']['leaflet_style'] = [
-      '#title' => 'Test leaflet_style',
-      '#type' => 'leaflet_style',
-      '#weight' => 1,
-      '#value_callback' => [$this, 'styleUnserialize'],
-    ];
-
-    $element['fichier']['mapping'] = [
-      '#title' => 'Attribute style',
-      '#type' => 'details',
-      '#open' => ((null !== $form_state->getValue("last_added")) && $delta == $form_state->getValue("last_added")) ? true : false,
-      '#prefix' => '<div id="mapping-fieldset-wrapper' . $delta . '">',
-      '#suffix' => '</div>',
-      // hide until a file is selected
-      '#access' => $file_selected ?? false,
-      '#weight' => 20,
-    ];
-
-    $element['fichier']['_nb_attribut'] = [
-      '#type' => 'value',
-      '#description' => 'number of attributs for delta ' . $delta + 1,
-      '#value' => 0,
-    ];
-    // save number of attributs mapping
-    $form_state->setValue(['_nb_attribut'], $element['fichier']['_nb_attribut']['#value']);
-
-
-
-    if ($file_selected && (! isset($this->geo_properties))) {
-      $props = [];
-      $file = File::Load($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0]);
-      $cont = file_get_contents($file->getFileUri());
-      foreach (json_decode($cont, true)['features'] as $feature) {
-        if ($feature['type'] == "Feature") {
-          foreach ($feature['properties'] as $key => $val) {
-            $props[$key][] = $val;
-          }
-        }
-      }
-
-      foreach ($props as $key => $value) {
-        // remove duplicate entries and also item contening only null
-        $ar = array_unique($props[$key]);
-        if ((count($ar) == 0) || (count($ar) == 1 && $ar[0] == null)) {
-          continue;
-        }
-        $props_uniq[$key] = $ar;
-      }
-      $this->geo_properties = $props_uniq;
-    }
-
-    $num_names = $form_state->getValue('_nb_attribut');
-    if (!$num_names && isset($element['fichier']['mappings'])) {
-      $num_names = count($element['fichier']['mappings']) ?? 0;
-      $form_state->setValue('_nb_attribut', $num_names);
-    } else if (!$num_names) {
-      $num_names = 0;
-      $form_state->setValue('_nb_attribut', $num_names);
-    }
-
-    for ($i = 0; $i < $num_names; $i++) {
-      $element['fichier']['mapping']['attribut'][$i] = [
-        '#title' => 'Attribute ' . $i,
-        '#type' => 'details',
-        '#open' => false,
-        '#weight' => $i,
-      ];
-
-      $element['fichier']['mapping']['attribut'][$i]['leaflet_style_mapping'] = array(
-        '#title' => 'Style Mapping',
-        '#type' => 'leaflet_style_mapping',
-        '#description' => 'Mapping ' . $delta . ':' . $i,
-        '#cardinality' => 10,
-        '#weight' => 1,
-        '#value_callback' => [$this, 'mappingUnserialize'],
-      );
-
-      // If there is more than one name, add the remove button.
-    if ($num_names >= 1) {
-      $element['fichier']['mapping']['attribut'][$i]['actions'] = [
-        '#type' => 'actions',
-      ];
-      $element['fichier']['mapping']['attribut'][$i]['actions']['remove_name'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Remove last'),
-        '#submit' => [static::class, 'removeLast'],
-        '#description' => 'Remove ' . $delta,
-        '#name' => 'remove_' . $delta, // #name must be defined and unique
-        '#ajax' => [
-          'callback' => [$this, 'addmoreCallback'],
-          'wrapper' => 'mapping-fieldset-wrapper' . $delta,
-        ],
-      ];
-    }
-    }
-
-    $element['fichier']['mapping']['actions'] = [
-      '#type' => 'actions',
-    ];
-
-    $element['fichier']['mapping']['actions']['add_name'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Add one more'),
-      '#submit' => [ [static::class, 'addOne'] ],
-      '#description' => 'Add ' . $delta,
-      '#name' => 'add_' . $delta, // #name must be defined and unique
-      '#ajax' => [
-        'callback' => [$this, 'addmoreCallback'],
-        'wrapper' => 'mapping-fieldset-wrapper' . $delta,
-      ],
-    ];
-    
-
-    // Return the updated widget
-    return $element;
-  }
 
   public static function processMultiple($element, FormStateInterface $form_state, $form) {
     return FileWidget::processMultiple($element, $form_state, $form);
@@ -594,18 +418,189 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
   }
 
   
-  /**
-   * Overrides \Drupal\Core\Field\WidgetBase::formMultipleElements().
-   *
-   * Special handling for draggable multiple widgets and 'add more' button.
+   /**
+   * {@inheritdoc}
    */
-  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
-    
-    $this->fieldDefinition->getFieldStorageDefinition()->setCardinality(FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
-    $elements = parent::formMultipleElements($items, $form, $form_state);
-
-    return $elements;
+  public function multipleElement(array $element, array &$form, FormStateInterface $form_state) {
+    // Use form API to enable multiple items.
+    $element['#type'] = 'formMultipleElements';
+    return $element;
   }
 
+  public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
 
+    if (static::$fieldName == null) {
+      static::$fieldName=$this->fieldDefinition->getName();
+    }
+    
+    $element = [];
+    $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
+    $element['#multiple'] = true;
+    $element['#tree'] = true;
+    $element['#max_delta'] = 0;
+
+
+    $element['data'] = [
+        '#title' => 'Data ' . $delta,
+        '#type' => 'details',
+        '#open' => true,
+        '#weight' => 10,
+      ];
+    $element['data']['fichier'] = [
+      '#type' => 'managed_file',
+      '#title' => "Fichier $delta",
+      '#upload_validators' =>  [
+        'file_validate_extensions' => ['geojson'],
+        'file_validate_size' => [Environment::getUploadMaxSize()],
+      ],
+      '#default_value' => [
+        'fids' => $items[$delta]->get('target_id')->getCastedValue() ?? 0
+      ],
+      '#fids' => 0,
+      '#multiple' => false,
+    ];
+
+    $element['data']['description'] = [
+      '#type' => 'textfield',
+      '#title' => t('Description'),
+      '#default_value' => $items[$delta]->fichier,
+      '#placeholder' => 'Description de la trace',
+      '#attributes' => [
+        'id' => 'data_description_' . $delta,
+      ],
+      // '#access' => null !== $form_state->getValue(['field_data', $delta, 'data', 'fichier']) ? true : false,
+    ];
+
+    if (isset($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'])) {
+      $file_selected = $form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0] > 0;
+    } else {
+      $file_selected = false;
+    }
+   
+
+    $element['fichier']['style'] = [
+      '#title' => 'Global style',
+      '#type' => 'details',
+      '#open' => false,
+      // hide until a file is selected
+      '#access' => $file_selected ?? false,
+      '#weight' => 19,
+    ];
+
+    $element['fichier']['style']['leaflet_style'] = [
+      '#title' => 'Test leaflet_style',
+      '#type' => 'leaflet_style',
+      '#weight' => 1,
+      '#value_callback' => [$this, 'styleUnserialize'],
+    ];
+
+    $element['fichier']['mapping'] = [
+      '#title' => 'Attribute style',
+      '#type' => 'details',
+      '#open' => ((null !== $form_state->getValue("last_added")) && $delta == $form_state->getValue("last_added")) ? true : false,
+      '#prefix' => '<div id="mapping-fieldset-wrapper' . $delta . '">',
+      '#suffix' => '</div>',
+      // hide until a file is selected
+      // '#access' => $file_selected ?? false,
+      '#weight' => 20,
+    ];
+
+    $element['fichier']['_nb_attribut'] = [
+      '#type' => 'value',
+      '#description' => 'number of attributs for delta ' . $delta + 1,
+      '#value' => 0,
+    ];
+    // save number of attributs mapping
+    $form_state->setValue(['_nb_attribut'], $element['fichier']['_nb_attribut']['#value']);
+
+
+
+    if ($file_selected && (! isset($this->geo_properties))) {
+      $props = [];
+      $file = File::Load($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0]);
+      $cont = file_get_contents($file->getFileUri());
+      foreach (json_decode($cont, true)['features'] as $feature) {
+        if ($feature['type'] == "Feature") {
+          foreach ($feature['properties'] as $key => $val) {
+            $props[$key][] = $val;
+          }
+        }
+      }
+
+      foreach ($props as $key => $value) {
+        // remove duplicate entries and also item contening only null
+        $ar = array_unique($props[$key]);
+        if ((count($ar) == 0) || (count($ar) == 1 && $ar[0] == null)) {
+          continue;
+        }
+        $props_uniq[$key] = $ar;
+      }
+      $this->geo_properties = $props_uniq;
+    }
+
+    $num_names = $form_state->getValue('_nb_attribut');
+    if (!$num_names && isset($element['fichier']['mappings'])) {
+      $num_names = count($element['fichier']['mappings']) ?? 0;
+      $form_state->setValue('_nb_attribut', $num_names);
+    } else if (!$num_names) {
+      $num_names = 0;
+      $form_state->setValue('_nb_attribut', $num_names);
+    }
+
+    for ($i = 0; $i < $num_names; $i++) {
+      $element['fichier']['mapping']['attribut'][$i] = [
+        '#title' => 'Attribute ' . $i,
+        '#type' => 'details',
+        '#open' => false,
+        '#weight' => $i,
+      ];
+
+      $element['fichier']['mapping']['attribut'][$i]['leaflet_style_mapping'] = array(
+        '#title' => 'Style Mapping',
+        '#type' => 'leaflet_style_mapping',
+        '#description' => 'Mapping ' . $delta . ':' . $i,
+        '#cardinality' => 10,
+        '#weight' => 1,
+        '#value_callback' => [$this, 'mappingUnserialize'],
+      );
+
+      // If there is more than one name, add the remove button.
+    if ($num_names >= 1) {
+      $element['fichier']['mapping']['attribut'][$i]['actions'] = [
+        '#type' => 'actions',
+      ];
+      $element['fichier']['mapping']['attribut'][$i]['actions']['remove_name'] = [
+        '#type' => 'submit',
+        '#value' => $this->t('Remove last'),
+        '#submit' => [static::class, 'removeLast'],
+        '#description' => 'Remove ' . $delta,
+        '#name' => 'remove_' . $delta, // #name must be defined and unique
+        '#ajax' => [
+          'callback' => [$this, 'addmoreCallback'],
+          'wrapper' => 'mapping-fieldset-wrapper' . $delta,
+        ],
+      ];
+    }
+    }
+
+    $element['fichier']['mapping']['actions'] = [
+      '#type' => 'actions',
+    ];
+
+    $element['fichier']['mapping']['actions']['add_name'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Add one more'),
+      '#submit' => [ [static::class, 'addOne'] ],
+      '#description' => 'Add ' . $delta,
+      '#name' => 'add_' . $delta, // #name must be defined and unique
+      '#ajax' => [
+        'callback' => [$this, 'addmoreCallback'],
+        'wrapper' => 'mapping-fieldset-wrapper' . $delta,
+      ],
+    ];
+    
+
+    // Return the updated widget
+    return $element;
+  }
 }

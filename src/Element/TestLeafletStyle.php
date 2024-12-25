@@ -2,45 +2,42 @@
 
 namespace Drupal\geojsonfile_field\Element;
 
-use Drupal\Core\Render\Element\File;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Component\Utility\NestedArray;
-use Drupal\file\Element\ManagedFile;
 use Drupal\Core\Render\Element\FormElementBase;
 
 /**
- * Provides a time element.
+ * Provides a custom form element for Leaflet Style.
  *
- * @FormElement("leaflet_style")
+ * @FormElement("test_leaflet_style")
  */
-class Style extends FormElementBase {
+class TestLeafletStyle extends FormElementBase {
 
+  /**
+   * {@inheritdoc}
+   */
   public function getInfo() {
-
-    $class = get_class($this);
     return [
-      '#input' => TRUE,
-      '#process' => [
-        [$class, 'processStyle'],
-      ],
+      '#stroke' => TRUE,
+      '#color' => '#F00FE8',
+      '#weight' => 6,
+      '#opacity' => 1,
+      '#linecap' => 'round',
+      '#linejoin' => 'round',
+      '#dasharray' => NULL,
+      '#dashoffset' => 0,
+      '#fill' => FALSE,
+      'fill_color' => '#C7A8A8',
+      '#fill_opacity' => 0.2,
+      '#fillrule' => 'evenodd',
+      '#process' => [[static::class, 'processTestLeafletStyle']],
+      '#theme_wrappers' => ['container'],
     ];
   }
 
-  public static function processStyle(&$element, FormStateInterface $form_state, &$complete_form) {
-
-    $input_exists = FALSE;
-
-    $field_element = NestedArray::getValue($form_state->getValues(), $element['#parents'], $input_exists);
-    if (!$input_exists) {
-      return;
-    }
-    if (isset($field_element)) {
-      $item = $field_element;
-    } else {
-      $item = [];
-    }
-
-
+  /**
+   * Process callback for the custom element.
+   */
+  public static function processTestLeafletStyle(&$element, FormStateInterface $form_state, &$form) {
     $element['stroke'] = [
       '#type' => 'checkbox',
       '#title' => t('<em>Stroke</em> field'),
