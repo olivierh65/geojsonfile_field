@@ -2,522 +2,564 @@
 
 namespace Drupal\geojsonfile_field\Plugin\Field\FieldWidget;
 
-use Drupal\file\Plugin\Field\FieldWidget\FileWidget;
-use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Field\FieldItemListInterface;
-use Drupal\Component\Utility\NestedArray;
-use GuzzleHttp\Psr7\Request as Psr7Request;
-use Symfony\Component\HttpFoundation\Request;
-use Drupal\Component\Utility\Html;
-use Drupal\Core\Security\TrustedCallbackInterface;
-use Drupal\file\Entity\File;
-
-use Drupal\Core\Entity\ContentEntityForm;
-use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\Render\ElementInfoManagerInterface;
-use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\WidgetBase;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Component\Utility\NestedArray;
+use \Drupal\file\Entity\File;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
-use Drupal\Core\Render\Element;
-use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\Core\Field\Attribute\FieldWidget;
-use Drupal\file\Element\ManagedFile;
-use Symfony\Component\Validator\ConstraintViolationListInterface;
-use Drupal\Core\Field\WidgetInterface;
-use Drupal\Component\Utility\Environment;
 
 
 /**
- * Provides the field widget for Symbol field.
+ * Plugin implementation of the 'test_geojsonfile_widget'.
  *
  * @FieldWidget(
  *   id = "geojsonfile_widget",
- *   label = @Translation("geojson File widget"),
- *   description = @Translation("An File field with a text field for a description"),
+ *   label = @Translation("GeoJSON File Widget"),
  *   field_types = {
- *     "geojsonfile_field"
+ *     "geojsonfile"
  *   }
  * )
  */
-class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
-
-  /**
-   * The file system service.
-   *
-   * @var \Drupal\Core\File\FileSystemInterface
-   */
-  static protected $fieldName = null;
-
-
-  public static function processMultiple($element, FormStateInterface $form_state, $form) {
-    return FileWidget::processMultiple($element, $form_state, $form);
-  }
-
-  /**
-   * Callback for both ajax-enabled buttons.
-   *
-   * Selects and returns the fieldset with the names in it.
-   */
-  public static function addmoreCallback(array &$form, FormStateInterface $form_state, Request $request) {
-    // return $form['mapping'];
-    $input_exists = FALSE;
-    $field_element = NestedArray::getValue($form, array_slice($form_state->getTriggeringElement()['#array_parents'], 0, 5), $input_exists);
-    return $field_element;
-  }
-
-  /**
-   * Submit handler for the "add-one-more" button.
-   *
-   * Increments the max counter and causes a rebuild.
-   */
-  public static function addOne(array &$form, FormStateInterface $form_state) {
-
-    $input_exists = FALSE;
-    // Use getTriggeringElement() to determine delta
-    $parent = array_slice($form_state->getTriggeringElement()['#parents'], 0, 3);
-    $nb_attribut_array = $parent;
-    $nb_attribut_array[] = '_nb_attribut';
-
-    $name_field = $form_state->getValue($nb_attribut_array) ?? 0;
-
-    // $name_field = count($field_element['attribut']);
-    $add_button = $name_field + 1;
-    $form_state->setValue($nb_attribut_array, $add_button);
-
-    $form_state->setValue("last_added", $parent[1]);
-
-    // Since our buildForm() method relies on the value of 'num_names' to
-    // generate 'name' form elements, we have to tell the form to rebuild. If we
-    // don't do this, the form builder will not call buildForm(). */
-    $form_state->setRebuild();
-  }
-
-  /**
-   * Submit handler for the "remove one" button.
-   *
-   * Decrements the max counter and causes a form rebuild.
-   */
-  public static function removeLast(array &$form, FormStateInterface $form_state) {
-    $parent = array_slice($form_state->getTriggeringElement()['#parents'], 0, 3);
-    $nb_attribut_array = $parent;
-    $nb_attribut_array[] = '_nb_attribut';
-
-    $name_field = $form_state->getValue($nb_attribut_array) ?? 0;
-
-    if ($name_field > 0) {
-      $remove_button = $name_field - 1;
-      $form_state->setValue($nb_attribut_array, $remove_button);
-    }
-    // Since our buildForm() method relies on the value of 'num_names' to
-    // generate 'name' form elements, we have to tell the form to rebuild. If we
-    // don't do this, the form builder will not call buildForm().
-    $form_state->setRebuild();
-  }
-
-
-
-  public  function mappingUnserialize($element, $input, $form_state) {
-    if ($input) {
-      return $input;
-    }
-
-    $data = array_slice($element['#parents'], 0, 2);
-
-    $data[] = 'mappings';
-    if ($form_state->getValue($data)) {
-      $a = unserialize($form_state->getValue($data));
-      return $a['attribut'][array_slice($element['#parents'], 4, 1)[0]]['leaflet_style_mapping'];
-    } else {
-      return [];
-    }
-  }
-
-  public static function styleUnserialize($element, $input, $form_state) {
-    if ($input) {
-      return $input;
-    }
-
-    $a = $element;
-    $data = array_slice($element['#parents'], 0, 2);
-
-    $data[] = 'styles';
-    $a = unserialize($form_state->getValue($data) ?? '');
-    if ($a) {
-      return $a['leaflet_style'];
-    } else {
-      return [];
-    }
-  }
+class GeojsonFileWidget extends WidgetBase {
 
   /**
    * {@inheritdoc}
    */
-  public static function defaultSettings() {
-    return [
-      'progress_indicator' => 'throbber',
-      'file_directory' => '',
-      'max_filesize' => '10MB',
-    ] + parent::defaultSettings();
-  }
+  protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
+    $elements = parent::formMultipleElements($items, $form, $form_state);
 
-  /**
-   * {@inheritdoc}
-   */
-  public function ___fieldSettingsForm(array $form, FormStateInterface $form_state) {
-    $element = [];
-    $settings = $this->getSettings();
-
-    $element['file_directory'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('File directory'),
-      '#default_value' => $settings['file_directory'],
-      '#description' => $this->t('Optional subdirectory within the upload destination where files will be stored. Do not include preceding or trailing slashes.'),
-      '#element_validate' => [[static::class, 'validateDirectory']],
-      '#weight' => 3,
+    $elements['#title'] = 'Liste des fichiers';
+    $elements['#attributes'] = [
+      'class' => ['geojsonfiled_liste_fichiers'],
     ];
 
-    // Make the extension list a little more human-friendly by comma-separation.
-    $extensions = str_replace(' ', ', ', $settings['file_extensions']);
-    $element['file_extensions'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Allowed file extensions'),
-      '#default_value' => $extensions,
-      '#description' => $this->t("Separate extensions with a comma or space. Each extension can contain alphanumeric characters, '.', and '_', and should start and end with an alphanumeric character."),
-      '#element_validate' => [[static::class, 'validateExtensions']],
-      '#weight' => 1,
-      '#maxlength' => 256,
-      // By making this field required, we prevent a potential security issue
-      // that would allow files of any type to be uploaded.
-      '#required' => TRUE,
-    ];
+    // Personnaliser le bouton "Add more".
+    $elements['add_more']['#value'] = $this->t('Ajouter un fichier geojson');
 
-    $element['max_filesize'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Maximum upload size'),
-      '#default_value' => $settings['max_filesize'],
-      '#description' => $this->t('Enter a value like "512" (bytes), "80 KB" (kilobytes) or "50 MB" (megabytes) in order to restrict the allowed file size. If left empty the file sizes could be limited only by PHP\'s maximum post and file upload sizes (current limit <strong>%limit</strong>).', [
-        '%limit' => ByteSizeMarkup::create(Environment::getUploadMaxSize()),
-      ]),
-      '#size' => 10,
-      '#element_validate' => [[static::class, 'validateMaxFilesize']],
-      '#weight' => 5,
-    ];
-
-    $element['description_field'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable <em>Description</em> field'),
-      '#default_value' => $settings['description_field'] ?? '',
-      '#description' => $this->t('The description field allows users to enter a description about the uploaded file.'),
-      '#weight' => 11,
-    ];
-
-    return $element;
-  }
-
-
-  public function __massageFormValues(array $values, array $form, FormStateInterface $form_state) {
-
-    $v = parent::massageFormValues($values, $form, $form_state);
-
-    foreach ($v as $key => $value) {
-      if (isset($value['style'])) {
-        $v[$key]['styles'] = serialize($value['style']);
-      }
-      if (isset($value['mapping'])) {
-        $v[$key]['mappings'] = serialize($value['mapping']);
+    // Parcourir chaque delta et modifier le bouton "Remove".
+    foreach ($elements as $key => &$element) {
+      if (is_numeric($key) && isset($element['_actions']['delete'])) {
+        $element['_actions']['delete']['#value'] = $this->t('Supprimer ce fichier');
       }
     }
-
-    return $v;
+    return $elements;
   }
 
 
   /**
    * {@inheritdoc}
    */
-  public function massageFormValues(array $values, array $form, FormStateInterface $form_state) {
-    // Since file upload widget now supports uploads of more than one file at a
-    // time it always returns an array of fids. We have to translate this to a
-    // single fid, as field expects single value.
-
-    // $new_values = $this->__massageFormValues($values, $form, $form_state);
-    $new_values = $values;
-    foreach ($new_values as $k1 => &$value) {
-      foreach ($value['fichier'] as $key => $fid) {
-        $value['fichier']['#required'] = true;
-        $value['fichier']['target_id'] = $fid;
-        unset($value['fichier'][$key]);
-      }
-    }
-
-    return $new_values;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function ___extractFormValues(FieldItemListInterface $items, array $form, FormStateInterface $form_state) {
-    parent::extractFormValues($items, $form, $form_state);
-
-    // Update reference to 'items' stored during upload to take into account
-    // changes to values like 'alt' etc.
-    // @see \Drupal\file\Plugin\Field\FieldWidget\FileWidget::submit()
-    $field_name = $this->fieldDefinition->getName();
-    $field_state = static::getWidgetState($form['#parents'], $field_name, $form_state);
-    $field_state['items'] = $items->getValue();
-    static::setWidgetState($form['#parents'], $field_name, $form_state, $field_state);
-  }
-
-  /**
-   * Form API callback. Retrieves the value for the file_generic field element.
-   *
-   * This method is assigned as a #value_callback in formElement() method.
-   */
-  public static function value($element, $input, FormStateInterface $form_state) {
-    if ($input) {
-      if (empty($input['display'])) {
-        // Updates the display field with the default value because
-        // #display_field is invisible.
-        if (empty($input['fids'])) {
-          $input['display'] = $element['#display_default'];
-        }
-        // Checkboxes lose their value when empty.
-        // If the display field is present, make sure its unchecked value is
-        // saved.
-        else {
-          $input['display'] = $element['#display_field'] ? 0 : 1;
-        }
-      }
-    }
-
-    // We depend on the managed file element to handle uploads.
-    $return = ManagedFile::valueCallback($element, $input, $form_state);
-
-    // Ensure that all the required properties are returned even if empty.
-    $return += [
-      'fids' => [],
-      'display' => 1,
-      'description' => '',
-    ];
-
-    return $return;
-  }
-
-
-  /**
-   * Form API callback: Processes a file_generic field element.
-   *
-   * Expands the file_generic type to include the description and display
-   * fields.
-   *
-   * This method is assigned as a #process callback in formElement() method.
-   */
-  public static function __process($element, FormStateInterface $form_state, $form) {
-    $item = $element['#value'];
-    $item['fids'] = $element['fids']['#value'];
-
-    // Add the display field if enabled.
-    if ($element['#display_field']) {
-      $element['display'] = [
-        '#type' => empty($item['fids']) ? 'hidden' : 'checkbox',
-        '#title' => new TranslatableMarkup('Include file in display'),
-        '#attributes' => ['class' => ['file-display']],
-      ];
-      if (isset($item['display'])) {
-        $element['display']['#value'] = $item['display'] ? '1' : '';
-      } else {
-        $element['display']['#value'] = $element['#display_default'];
-      }
-    } else {
-      $element['display'] = [
-        '#type' => 'hidden',
-        '#value' => '1',
-      ];
-    }
-
-    // Add the description field if enabled.
-    if ($element['#description_field'] && $item['fids']) {
-      $config = \Drupal::config('file.settings');
-      $element['description'] = [
-        '#type' => $config->get('description.type'),
-        '#title' => new TranslatableMarkup('Description'),
-        '#value' => $item['description'] ?? '',
-        '#maxlength' => $config->get('description.length'),
-        '#description' => new TranslatableMarkup('The description may be used as the label of the link to the file.'),
-      ];
-    }
-
-    // Adjust the Ajax settings so that on upload and remove of any individual
-    // file, the entire group of file fields is updated together.
-    if ($element['#cardinality'] != 1) {
-      $parents = array_slice($element['#array_parents'], 0, -1);
-      $new_options = [
-        'query' => [
-          'element_parents' => implode('/', $parents),
-        ],
-      ];
-      $field_element = NestedArray::getValue($form, $parents);
-      $new_wrapper = $field_element['#id'] . '-ajax-wrapper';
-      foreach (Element::children($element) as $key) {
-        if (isset($element[$key]['#ajax'])) {
-          $element[$key]['#ajax']['options'] = $new_options;
-          $element[$key]['#ajax']['wrapper'] = $new_wrapper;
-        }
-      }
-      unset($element['#prefix'], $element['#suffix']);
-    }
-
-    // Add another submit handler to the upload and remove buttons, to implement
-    // functionality needed by the field widget. This submit handler, along with
-    // the rebuild logic in file_field_widget_form() requires the entire field,
-    // not just the individual item, to be valid.
-    foreach (['upload_button', 'remove_button'] as $key) {
-      $element[$key]['#submit'][] = [static::class, 'submit'];
-      $element[$key]['#limit_validation_errors'] = [array_slice($element['#parents'], 0, -1)];
-    }
-
-    return $element;
-  }
-
-
-  /**
-   * Retrieves the file description from a field element.
-   *
-   * This helper static method is used by processMultiple() method.
-   *
-   * @param array $element
-   *   An associative array with the element being processed.
-   *
-   * @return array|false
-   *   A description of the file suitable for use in the administrative
-   *   interface.
-   */
-  protected static function ___getDescriptionFromElement($element) {
-    // Use the actual file description, if it's available.
-    if (!empty($element['#default_value']['description'])) {
-      return $element['#default_value']['description'];
-    }
-    // Otherwise, fall back to the filename.
-    if (!empty($element['#default_value']['filename'])) {
-      return $element['#default_value']['filename'];
-    }
-    // This is probably a newly uploaded file; no description is available.
-    return FALSE;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function flagErrors(FieldItemListInterface $items, ConstraintViolationListInterface $violations, array $form, FormStateInterface $form_state) {
-    // Never flag validation errors for the remove button.
-    $clicked_button = end($form_state->getTriggeringElement()['#parents']);
-    if ($clicked_button !== 'remove_button') {
-      parent::flagErrors($items, $violations, $form, $form_state);
-    }
-  }
-
-  
-   /**
-   * {@inheritdoc}
-   */
-  public function multipleElement(array $element, array &$form, FormStateInterface $form_state) {
-    // Use form API to enable multiple items.
-    $element['#type'] = 'formMultipleElements';
-    return $element;
-  }
-
   public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
+    $value = $items[$delta];
+    $wrapper_id = "mapping-$delta";
 
-    if (static::$fieldName == null) {
-      static::$fieldName=$this->fieldDefinition->getName();
+    // Déterminez les valeurs actuelles ou récupérez-les de l'état du formulaire.
+    $geojson_mapping = $form_state->get(['geojson_mapping', $delta]);
+    if ($geojson_mapping === null) {
+      if (isset($value->mapping)) {
+        $geojson_mapping = $value->mapping;
+        $form_state->set(['geojson_mapping', $delta], $geojson_mapping);
+      } else {
+        $geojson_mapping = [];
+      }
     }
-    
-    $element = [];
+    $geojson_mapping = is_array($geojson_mapping) ? $geojson_mapping : [];
+
+    $file_upload_status_id = $values->file_upload_status_id ?? $form_state->getUserInput()[$items->getName()][$delta]['file_upload_status_id'] ?? null; 
+    if (! $file_upload_status_id) {
+      // if(!$form_state->get(['file_status', $delta])) {
+        $uuid = \Drupal::service('uuid')->generate();
+        $form_state->set(['file_status', $uuid], 0);
+      }
+      else {
+        $uuid = $file_upload_status_id;
+      }
+
+      
+    if ((!$form_state->isRebuilding()) || (!$form_state->isSubmitted()) ||
+      null === $form_state->get(['geojson_attributs', $delta])
+    ) {
+      // Si le fichier est deja definit, recharge les attributs
+      if (isset($value->file)) {
+        $temp = $value->file;
+        $fid = reset($temp);
+      } elseif (isset($form_state->getValue($items->getName())[$delta]['file'])) {
+        $fid = reset($form_state->getValue($items->getName())[$delta]['file']);
+      } else {
+        $fid = -1;
+        $form_state->set(['file_status', $uuid], 0);
+      }
+      // Récupérer les attributs du fichier GeoJSON.
+      if ($fid > 0) {
+        $attribs = static::getGeojsonAttributs($form, $form_state, $fid);
+        $form_state->set(['geojson_attributs', $delta], $attribs);
+        $form_state->set(['file_status', $uuid], 1);
+      }
+    }
+
+    // Définir les propriétés du champ.    
     $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
     $element['#multiple'] = true;
     $element['#tree'] = true;
-    $element['#max_delta'] = 0;
+    // Nombre maxi de fichiers
+    $element['#max_delta'] = 10;
+    $element['#title'] = 'Fichier N° ' . $delta + 1;
 
-
-    $element['data'] = [
-        '#title' => 'Data ' . $delta,
-        '#type' => 'details',
-        '#open' => true,
-        '#weight' => 10,
-      ];
-    $element['data']['fichier'] = [
-      '#type' => 'managed_file',
-      '#title' => "Fichier $delta",
-      '#upload_validators' =>  [
-        'file_validate_extensions' => ['geojson'],
-        'file_validate_size' => [Environment::getUploadMaxSize()],
+    $element['file'] = [
+      '#type' => 'geojson_managed_file',
+      '#title' => t('Fichier "' . $value->nom .'"' ?? 'GeoJSON File'),
+      '#upload_location' => 'public://geojson/', // Chemin où les fichiers seront stockés
+      '#default_value' => isset($value->file) ? $value->file : NULL,
+      '#weight' => 10,
+      '#multiple' => FALSE,
+      '#upload_validators' => [
+        'file_validate_extensions' => ['geojson jpg pdf'],  // Pour restreindre les extensions de fichier (optionnel)
       ],
-      '#default_value' => [
-        'fids' => $items[$delta]->get('target_id')->getCastedValue() ?? 0
-      ],
-      '#fids' => 0,
-      '#multiple' => false,
-    ];
-
-    $element['data']['description'] = [
-      '#type' => 'textfield',
-      '#title' => t('Description'),
-      '#default_value' => $items[$delta]->fichier,
-      '#placeholder' => 'Description de la trace',
+      '#widget_class' => static::class, // Ajout d'une référence à la classe.
+      '#accept' => '.geojson',
       '#attributes' => [
-        'id' => 'data_description_' . $delta,
+        'class' => ['file-upload-' . $delta],
+        'data-delta' => $delta,
       ],
-      // '#access' => null !== $form_state->getValue(['field_data', $delta, 'data', 'fichier']) ? true : false,
+    ];
+$element['infos'] = [
+      '#type' => 'details',
+      '#title' => t('Informations'),
+      '#weight' => 12,
     ];
 
-    if (isset($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'])) {
-      $file_selected = $form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0] > 0;
-    } else {
-      $file_selected = false;
-    }
+    $element['infos']['nom'] = [
+      '#type' => 'textfield',
+      '#title' => t('Nom de la trace'),
+      '#default_value' => $value->nom ?? '',
+      '#weight' => 15,
+    ];
    
-
-    $element['fichier']['style'] = [
-      '#title' => 'Global style',
-      '#type' => 'details',
-      '#open' => false,
-      // hide until a file is selected
-      '#access' => $file_selected ?? false,
-      '#weight' => 19,
+    $element['infos']['description'] = [
+      '#type' => 'textarea',
+      '#title' => t('Description'),
+      '#default_value' => $value->description ?? '',
+      '#weight' => 16,
     ];
 
-    $element['fichier']['style']['leaflet_style'] = [
-      '#title' => 'Test leaflet_style',
-      '#type' => 'leaflet_style',
-      '#weight' => 1,
-      '#value_callback' => [$this, 'styleUnserialize'],
+    // Champ caché pour identifier les données meme apres les re-indexations.
+    $element['file_upload_status_id'] = [
+      '#type' => 'hidden',
+      '#value' => $uuid,
+      '#attributes' => [
+        'class' => ['file-upload-status-id-' . $delta],
+        'id' => 'file-upload-status-id-'. $uuid,
+      ],
     ];
 
-    $element['fichier']['mapping'] = [
-      '#title' => 'Attribute style',
+     // Champ caché pour stocker l'état du fichier.
+     $element['file_upload_status'] = [
+      '#type' => 'hidden',
+      '#default_value' => $form_state->get(['file_status', $uuid]) ?? 0,
+      '#value' => $form_state->get(['file_status', $uuid]) ?? 0,
+      '#attributes' => [
+        'class' => ['file-upload-status-' . $delta],
+        'id' => 'file-upload-status-id',
+      ],
+    ];
+
+    $element['style_global'] = [
       '#type' => 'details',
-      '#open' => ((null !== $form_state->getValue("last_added")) && $delta == $form_state->getValue("last_added")) ? true : false,
-      '#prefix' => '<div id="mapping-fieldset-wrapper' . $delta . '">',
+      '#title' => 'Style Global',
+      '#prefix' => '<div id="mapping-style-wrapper-' . $delta . '">',
       '#suffix' => '</div>',
-      // hide until a file is selected
-      // '#access' => $file_selected ?? false,
       '#weight' => 20,
+      '#states' => [
+        'visible' => [
+          // Montre cet élément lorsque le champ managed_file contient un fichier.
+          '[name="' . $items->getName() . '[' . $delta . '][file_upload_status]"]' => ['value' => '1'],
+        ],
+      ],
+      // '#access' => $file_selected > 0 ? true : false,
     ];
 
-    $element['fichier']['_nb_attribut'] = [
-      '#type' => 'value',
-      '#description' => 'number of attributs for delta ' . $delta + 1,
-      '#value' => 0,
+
+    $element['style_global']['style'] = [
+      '#type' => 'leaflet_style',
+      '#title' => t('Leaflet Style'),
+      '#default_value' => $value->style_global['style'] ?? [],
     ];
-    // save number of attributs mapping
-    $form_state->setValue(['_nb_attribut'], $element['fichier']['_nb_attribut']['#value']);
+
+    $element['mapping'] = [
+      '#type' => 'details',
+      '#title' => 'Mappings',
+      '#prefix' => '<div id="mapping-details-wrapper-' . $delta . '">',
+      '#suffix' => '</div>',
+      '#weight' => 30,
+      '#states' => [
+        'visible' => [
+          '[name="' . $items->getName() . '[' . $delta . '][file_upload_status]"]' => ['value' => '1'],
+        ],
+      ],
+    ];
+
+    foreach ($geojson_mapping as $index => $attribut) {
+
+      $trigger = $form_state->getTriggeringElement();
+      if (
+        isset($trigger["#attributes"]["class"]) &&
+        (in_array("mapping-add-button", $trigger["#attributes"]["class"]))
+      ) {
+        $element['mapping']['#open'] = true;
+      } else {
+        $element['mapping']['#open'] = false;
+      }
+      $attribut_options = $this->getAttributeOptions($index, $delta, $form_state);
+      $attribut_default = null;
+      $value_default = null;
+      $value_options = [];
+
+      if ($trigger !== null) {
+        $fieldname = $trigger['#parents'][0];
+        if ($form_state->getValue([$fieldname, $delta, 'mapping', $index, 'attribut']) == null) {
+          // mapping pas encore cree
+          // Recupere les valeurs precedement sauvées
+          if (isset(($value->mapping)[$index])) {
+            // mapping deja sauvegardé
+            if (!empty(($value->mapping)[$index]['attribut'])) {
+              $attribut_default = ($value->mapping)[$index]['attribut'];
+              $value_default = ($value->mapping)[$index]['value'];
+            } else {
+              $attribut_default = null;
+              $value_default = null;
+            }
+          }
+        } else {
+          // mapping deja cree
+          $attribut_default = $form_state->getValue([$fieldname, $delta, 'mapping', $index, 'attribut']);
+          if (!empty($attribut_default)) {
+            $attr_saved = null;
+            if (isset(($value->mapping)[$index])) {
+              // mapping deja sauvegardé
+              if (!empty(($value->mapping)[$index]['attribut'])) {
+                $attr_saved = ($value->mapping)[$index]['attribut'];
+              }
+            }
+            if ($attribut_default == $attr_saved) {
+              // Attriut selectionné est le meme que celui precedment sauvé
+              // alors, selectionne la meme valeur
+              $value_default = ($value->mapping)[$index]['value'];
+              $attribut_default = $attr_saved;
+            } else {
+              $value_default = null;
+            }
+          } else {
+            $attribut_default = null;
+            $value_default = null;
+          }
+        }
+      } else {
+        // Pas de trigger, certainement premier chargement
+        if (isset(($value->mapping)[$index])) {
+          // mapping deja sauvegardé
+          if (!empty(($value->mapping)[$index]['attribut'])) {
+            $attribut_default = ($value->mapping)[$index]['attribut'];
+            $value_default = ($value->mapping)[$index]['value'];
+          } else {
+            $attribut_default = null;
+            $value_default = null;
+          }
+        }
+      }
+
+      if ($attribut_default == null) {
+        // Si pas d'attrubut par defaut, utilise le premier de la liste
+        $attribut_default = array_key_first($attribut_options);
+      }
+      $value_options = $this->getValueOptions($attribut_default, $index, $delta, $form_state);
+      if ($value_default == null) {
+        $value_default = array_key_first($value_options);
+      }
 
 
+      $element['mapping'][$index] = [
+        '#type' => 'details',
+        '#title' => t('Mapping @attribut == @value (@index)', [
+          '@attribut' => $attribut_default,
+          '@value' => $value_default,
+          '@index' => $index + 1,
+        ]),
+        '#name' => 'mapping-' . $delta . '-' . $index,
+        '#weight' => 30 + $index,
+        '#theme' => 'geojson_mapping_item', // Thème Twig personnalisé
+        '#open' => false,
+        '#attributes' => [
+          'class' => ['mapping-item'],
+        ],
+        'remove_button' => [
+          '#type' => 'submit',
+          '#value' => t('Remove'),
+          '#name' => 'remove_' . $delta . '-' . $index,
+          '#submit' => [[$this, 'removeMapping']],
+          '#ajax' => [
+            'callback' => [static::class, 'updateMappingCallback'],
+            'wrapper' => 'mapping-details-wrapper-' . $delta,
+          ],
+          '#attributes' => [
+            'class' => ['mapping-remove-button'],
+          ],
+        ],
+        'attribut' => [
+          '#type' => 'select',
+          '#title' => t('Attribut'),
+          '#options' => $attribut_options,
+          '#default_value' => $attribut_default ?? null,
+          '#ajax' => [
+            'callback' => [$this, 'updateValueOptions'],
+            'disable-refocus' => FALSE, // Or TRUE to prevent re-focusing on the triggering element.
+            'wrapper' => $wrapper_id . '-value-' . $index,
+            'event' => 'change',
+            'progress' => [
+              'type' => 'throbber',
+              'message' => t('Verifying entry...'),
+            ],
+          ],
+        ],
+        'value' => [
+          '#type' => 'select',
+          '#title' => t('Value'),
+          '#options' => $value_options,
+          '#default_value' => $value_default ?? null,
+          '#prefix' => '<div id="' . $wrapper_id . '-value-' . $index . '">',
+          '#suffix' => '</div>',
+        ],
+        'label' => [
+          '#type' => 'textfield',
+          '#title' => t('Label'),
+          '#default_value' => $attribut['label'] ?? '',
+        ],
+        'detail_style' => [
+          '#type' => 'details',
+          '#open' => false,
+          '#title' => t('Style pour @attribut == @value', [
+            '@attribut' => $attribut_default,
+            '@value' => $value_default,
+          ]),
+          'style' => [
+            '#type' => 'leaflet_style',
+            '#title' => t('Leaflet Style'),
+            '#default_value' => $attribut['detail_style']['style'] ?? [],
+          ],
+        ],
 
-    if ($file_selected && (! isset($this->geo_properties))) {
-      $props = [];
-      $file = File::Load($form_state->getValue($items[$delta]->getFieldDefinition()->getName())[0]['fichier'][0]);
+      ];
+    }
+
+    $element['mapping']['add_more'] = [
+      '#type' => 'submit',
+      '#value' => t('Add Mapping'),
+      '#name' => 'add_more_' . $delta,
+      '#submit' => [[$this, 'addMapping']],
+      '#ajax' => [
+        'callback' => [static::class, 'updateMappingCallback'],
+        'wrapper' => 'mapping-details-wrapper-' . $delta,
+      ],
+      '#attributes' => [
+        'class' => ['mapping-add-button'],
+      ],
+    ];
+
+    // Définir un thème personnalisé pour cet élément.
+    $element['#theme'] = 'geojsonfile_field_widget_theme';
+
+    // Ajouter des variables pour le thème.
+    $element['#attached']['library'][] = 'geojsonfile_field/update_value';
+    return $element;
+  }
+
+  public function ___validateMyField(array &$element, FormStateInterface $form_state, array &$complete_form) {
+    $value = $form_state->getValue($element['#parents']);
+    $form_state->setValue($element['#parents']['#value'], $form_state->getValue([$element['#parents'][0], $element['#parents'][1], 'file_upload_status']));
+    // $element['#value']=$form_state->getValue([$element['#parents'][0], $element['#parents'][1], 'file_upload_status']);
+    if ($value < 0) {
+      $form_state->setError($element, $this->t('Value must be positive.'));
+    }
+  }
+
+  public function updateStyleGlobalCallback(array &$form, FormStateInterface $form_state) {
+    // Logique pour mettre à jour le champ 'style_global'
+    return $form['style_global'];
+  }
+
+
+  /**
+   * Get options for the attribute select field.
+   */
+  protected function getAttributeOptions($index, $delta, $form_state) {
+    $options = $form_state->get(['geojson_attributs', $delta]);
+    // $options = $form_state->getStorage()['geojson_attributs'][$delta];
+    $options_select = [];
+    foreach ($options as $key => $val) {
+      $options_select[$key] = $key;
+    }
+    return $options_select;
+  }
+
+  /**
+   * Get options for the value select field.
+   */
+  protected function getValueOptions($attribut_default, $index, $delta, $form_state) {
+    $options = $form_state->get(['geojson_attributs', $delta]);
+    $options_select = [];
+    if (isset($options[$attribut_default])) {
+      foreach ($options[$attribut_default] as $key => $val) {
+        $options_select[$val] = $val;
+      }
+    }
+    return $options_select;
+  }
+
+
+  /**
+   * Submit handler for adding a mapping group.
+   */
+  public function addMapping(array &$form, FormStateInterface $form_state) {
+    // Ne pas utiliser une fi=onction static
+    // $delta dans set et get ne semble pas etre utilisé
+
+    // Récupérez le delta (index du champ actuel).
+    $trigger = $form_state->getTriggeringElement();
+    $delta = $trigger['#parents'][1];
+
+    // Ajoutez un nouvel attribut au conteneur existant.
+    $geojson_mapping = $form_state->get(['geojson_mapping', $delta]) ?? [];
+    $geojson_mapping[] = ['attribut' => '', 'value' => '', 'label' => '', 'style' => []];
+    $form_state->set(['geojson_mapping', $delta], $geojson_mapping);
+
+    // Marquez le formulaire pour reconstruction.
+    $form_state->setRebuild();
+  }
+
+
+  /**
+   * Submit handler for removing a mapping group.
+   */
+  public function removeMapping(array &$form, FormStateInterface $form_state) {
+    // Ne pas utiliser une fi=onction static
+    // $delta dans set et get ne semble pas etre utilisé
+
+    // Récupérez le delta et l'index à supprimer.
+    $trigger = $form_state->getTriggeringElement();
+    $delta = $trigger['#parents'][1];
+    $index = $trigger['#parents'][3]; // L'index dans le tableau des attributs.
+
+    // Supprimez l'attribut correspondant.
+    $geojson_mapping = $form_state->get(['geojson_mapping', $delta]) ?? [];
+    unset($geojson_mapping[$index]);
+
+    //Supprime l'element de form_state
+    $fields = $form_state->getValue(array_slice($trigger['#parents'], 0, 3));
+    unset($fields[$index]);
+    $form_state->setValue(array_slice($trigger['#parents'], 0, 3), $fields);
+    // TODO - faut-il re-indexer ???
+    $form_state->set(['geojson_mapping', $delta], /* array_values */ ($geojson_mapping)); // Réindexation.
+
+    // Marquez le formulaire pour reconstruction.
+    $form_state->setRebuild();
+  }
+
+  /**
+   * AJAX callback to update the mapping container.
+   */
+  public static function updateMappingCallback(array &$form, FormStateInterface $form_state) {
+    // Utilise #array_parents pour cibler dynamiquement l'élément.
+    $field_element = NestedArray::getValue($form, array_slice($form_state->getTriggeringElement()['#array_parents'], 0, 4));
+
+    if (! empty($field_element)) {
+      return $field_element;
+    } else {
+      return ['#markup' => t('Unable to update the mapping section.')];
+    }
+  }
+
+  /**
+   * AJAX callback to update value options.
+   */
+  public function updateValueOptions(array &$form, FormStateInterface $form_state) {
+    // Récupérer les parents du champ déclencheur.
+    $trigger = $form_state->getTriggeringElement();
+    $parents = array_slice($trigger['#array_parents'], 0, 5);
+    $delta = $trigger['#parents'][1];
+    $index = $trigger['#parents'][3];
+
+    $values = $this->getValueOptions($trigger['#value'], $index, $delta, $form_state);
+
+    // Ajouter 'value' pour cibler le champ à mettre à jour.
+    $parents[] = 'value';
+
+    // Récupérer l'élément dans le formulaire reconstruit.
+    $field_element = NestedArray::getValue($form, $parents);
+    // et le mettre a jour
+    /* $field_element['#options'] = $values;
+    $field_element['#default_value'] =  null;
+    // $field_element['#value'] =  null;
+    $field_element["#ajax_processed"] = false;
+    $field_element['#validated'] = true;
+
+    // clear errors
+    $form_state->clearErrors(); */
+
+    return $field_element ?? ['#markup' => t('Unable to update the value options.')];
+  }
+
+
+  /**
+   * {@inheritdoc}
+   */
+  public function extractFormValues(FieldItemListInterface $items, array $form, FormStateInterface $form_state) {
+
+    $field_name = $this->fieldDefinition->getName();
+    $values = $form_state->getValue($field_name);
+
+    $vals = $items->getGeojsonfieldValues($values);
+
+    foreach ($vals as $delta => $value) {
+      // Définir les valeurs extraites dans l'objet $items.
+      $items[$delta]->setValue($value);
+      if (isset($value['file']) && $value['file'] > 0) {
+        $form_state->set(['file_status', $delta], 1);
+      } else {
+        $form_state->set(['file_status', $delta], 0);
+      }
+    }
+  }
+
+  public static function GeojsonAttributs($form, FormStateInterface &$form_state) {
+    $trigger = $form_state->getTriggeringElement();
+    $delta = $trigger['#parents'][1];
+    switch (end($trigger['#parents'])) {
+      case 'remove_button':
+        $form_state->set(['geojson_attributs', $delta], null);
+        break;
+      case 'upload_button':
+        $attribs = static::getGeojsonAttributs($form, $form_state);
+        $form_state->set(['geojson_attributs', $delta], $attribs);
+    }
+  }
+
+
+  public static function getGeojsonAttributs($form, FormStateInterface &$form_state, $fid = -1) {
+    $trigger = $form_state->getTriggeringElement();
+    if ($trigger !== null) {
+      $delta = $trigger['#parents'][1];
+      $values = $form_state->getValue(reset($trigger['#parents']));
+      if (isset($values[$delta]['file']) && is_array(($values[$delta]['file']))) {
+        if (isset($values[$delta]['file']['fids'])) {
+          $fid = reset($values[$delta]['file']['fids']);
+        } else {
+          $fid = reset($values[$delta]['file']);
+        }
+      }
+    }
+    $props = [];
+    if ($fid > 0) {
+      $file = File::Load($fid);
       $cont = file_get_contents($file->getFileUri());
       foreach (json_decode($cont, true)['features'] as $feature) {
         if ($feature['type'] == "Feature") {
@@ -526,81 +568,63 @@ class GeojsonFileWidget extends WidgetBase implements WidgetInterface {
           }
         }
       }
+    }
 
-      foreach ($props as $key => $value) {
-        // remove duplicate entries and also item contening only null
-        $ar = array_unique($props[$key]);
-        if ((count($ar) == 0) || (count($ar) == 1 && $ar[0] == null)) {
-          continue;
-        }
-        $props_uniq[$key] = $ar;
+    foreach ($props as $key => $value) {
+      // remove duplicate entries and also item contening only null
+      $ar = array_unique($props[$key]);
+      if ((count($ar) == 0) || (count($ar) == 1 && $ar[0] == null)) {
+        continue;
       }
-      $this->geo_properties = $props_uniq;
+      $props_uniq[$key] = $ar;
     }
-
-    $num_names = $form_state->getValue('_nb_attribut');
-    if (!$num_names && isset($element['fichier']['mappings'])) {
-      $num_names = count($element['fichier']['mappings']) ?? 0;
-      $form_state->setValue('_nb_attribut', $num_names);
-    } else if (!$num_names) {
-      $num_names = 0;
-      $form_state->setValue('_nb_attribut', $num_names);
-    }
-
-    for ($i = 0; $i < $num_names; $i++) {
-      $element['fichier']['mapping']['attribut'][$i] = [
-        '#title' => 'Attribute ' . $i,
-        '#type' => 'details',
-        '#open' => false,
-        '#weight' => $i,
-      ];
-
-      $element['fichier']['mapping']['attribut'][$i]['leaflet_style_mapping'] = array(
-        '#title' => 'Style Mapping',
-        '#type' => 'leaflet_style_mapping',
-        '#description' => 'Mapping ' . $delta . ':' . $i,
-        '#cardinality' => 10,
-        '#weight' => 1,
-        '#value_callback' => [$this, 'mappingUnserialize'],
-      );
-
-      // If there is more than one name, add the remove button.
-    if ($num_names >= 1) {
-      $element['fichier']['mapping']['attribut'][$i]['actions'] = [
-        '#type' => 'actions',
-      ];
-      $element['fichier']['mapping']['attribut'][$i]['actions']['remove_name'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Remove last'),
-        '#submit' => [static::class, 'removeLast'],
-        '#description' => 'Remove ' . $delta,
-        '#name' => 'remove_' . $delta, // #name must be defined and unique
-        '#ajax' => [
-          'callback' => [$this, 'addmoreCallback'],
-          'wrapper' => 'mapping-fieldset-wrapper' . $delta,
-        ],
-      ];
-    }
-    }
-
-    $element['fichier']['mapping']['actions'] = [
-      '#type' => 'actions',
-    ];
-
-    $element['fichier']['mapping']['actions']['add_name'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Add one more'),
-      '#submit' => [ [static::class, 'addOne'] ],
-      '#description' => 'Add ' . $delta,
-      '#name' => 'add_' . $delta, // #name must be defined and unique
-      '#ajax' => [
-        'callback' => [$this, 'addmoreCallback'],
-        'wrapper' => 'mapping-fieldset-wrapper' . $delta,
-      ],
-    ];
-    
-
-    // Return the updated widget
-    return $element;
+    return $props_uniq;
   }
+
+    /**
+   * Ajax refresh callback for the "Remove" button.
+   *
+   * This returns the new widget element content to replace
+   * the previous content made obsolete by the form submission.
+   *
+   * @param array $form
+   *   The form array to remove elements from.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form.
+   */
+  /**
+   * {@inheritDoc}
+   *
+   * @param array $form
+   * @param FormStateInterface $form_state
+   * @return void
+   */
+  public static function deleteAjax(array &$form, FormStateInterface $form_state) {
+
+    // !!!!! Reindex les elements !!!!
+    $form = parent::deleteAjax($form, $form_state);
+    $button = $form_state->getTriggeringElement();
+
+    // Met a jour file_status en supprimant cette entrée
+    $file_status=$form_state->get('file_status');
+    unset($file_status[$button['#parents'][1]]);
+    $form_state->set('file_status', $file_status);
+
+    return $form;
+  }
+
+  public static function deleteSubmit(&$form, FormStateInterface $form_state) {
+
+    // avant la suppression et reindexation, met a jour le tableau file_status
+    $button = $form_state->getTriggeringElement();
+    $delta = (int) $button['#delta'];
+    $field_name = $button['#parents'][0];
+    $id = ($form_state->getUserInput())[$field_name][$delta]['file_upload_status_id'] ?? null;
+    $file_status=$form_state->get('file_status');
+    unset($file_status[$id]);
+    $form_state->set('file_status', $file_status);
+    
+    parent::deleteSubmit($form, $form_state);
+  }
+
 }

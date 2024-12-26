@@ -1,5 +1,0 @@
-services:
-  geojsonfile_field.custom_data_validation:
-    class: Drupal\geojsonfile_field\Plugin\Validation\Constraint\CustomDataValidationValidator
-    tags:
-      - { name: validator.constraint_validator, alias: CustomDataValidation }
