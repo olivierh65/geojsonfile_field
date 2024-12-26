@@ -32,6 +32,7 @@ class TestGeojsonfileItemList extends FieldItemList {
                     $item->file = $file ? $file->id() : NULL;
                 }
             }
+
             // Sérialisation des données JSON.
             $item->style = is_array($item->style) ? json_encode($item->style) : $item->style;
             $item->mapping = is_array($item->mapping) ? json_encode($item->mapping) : $item->mapping;
@@ -39,8 +40,8 @@ class TestGeojsonfileItemList extends FieldItemList {
         parent::preSave(); // Appelez la méthode parent pour effectuer la sauvegarde
     }
 
-    /**
-     * Exemple d'implémentation de setValue().
+/**
+     * Appelé après la sauvegarde des éléments du champ.
      */
     public function setValue($values, $notify = TRUE) {
         foreach ($values as $index => &$value) {
@@ -50,6 +51,11 @@ class TestGeojsonfileItemList extends FieldItemList {
                         $value[$property_name] = !empty($value[$property_name]) ? [(int) $value[$property_name]] : [];
                         // Retourne un tableau contenant l'ID du fichier pour le widget `managed_file`.
                         break;
+                        case'nom':
+                            case 'description':
+                                // Récupérer les valeurs de champ `nom` et `description`.
+                                // Ces champs sont des champs de texte simples, donc pas besoin de traitement
+                                break;
 
                     case 'style':
                         if (!empty($value[$property_name]) && is_string($value[$property_name])) {
@@ -79,7 +85,7 @@ class TestGeojsonfileItemList extends FieldItemList {
         $vals = [];
         foreach ($values as $delta => $value) {
             if (! is_array($value)) {
-            // ne garde que les tableaux
+                // ne garde que les tableaux
                 continue;
             }
             // Récupérer l'ID du fichier.
@@ -100,6 +106,8 @@ class TestGeojsonfileItemList extends FieldItemList {
             }
             $vals[$delta] = [
                 'file' => $file_id ? (int) $file_id : NULL,
+                'nom' => !empty($value['infos']['nom']) ? $value['infos']['nom'] : NULL,
+                'description' => !empty($value['infos']['description']) ? $value['infos']['description'] : NULL,
                 'style' => !empty($style) ? json_encode($style) : NULL,
                 'mapping' => !empty($mapping) ? json_encode($mapping) : NULL,
             ];
@@ -113,6 +121,11 @@ class TestGeojsonfileItemList extends FieldItemList {
             case 'file':
                 // Retourne un tableau contenant l'ID du fichier pour le widget `managed_file`.
                 return !empty($this->values['file']) ? [(int) $this->values['file']] : [];
+
+            case 'nom':
+            case 'description':
+                return $this->values[$property_name];
+                break;
 
             case 'style':
             case 'mapping':

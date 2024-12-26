@@ -30,6 +30,14 @@ class TestGeojsonfile extends FieldItemBase {
           'type' => 'int',
           'unsigned' => TRUE,
         ],
+        'nom' => [
+          'type' => 'varchar',
+          'length' => 255,
+        ],
+        'description' => [
+          'type' => 'text',
+          'size' => 'big',
+        ],
         'style' => [
           'type' => 'text',
           'size' => 'big',
@@ -52,6 +60,14 @@ class TestGeojsonfile extends FieldItemBase {
       ->setLabel(t('Geojson File ID'))
       ->setRequired(false);
 
+    $properties['nom'] = DataDefinition::create('string')
+      ->setLabel(t('Nom de la trace'))
+      ->setDescription(t('Nom de la trace.'));
+
+      $properties['description'] = DataDefinition::create('string')
+      ->setLabel(t('Description'))
+      ->setDescription(t('Description de la trace.'));
+      
     $properties['style'] = DataDefinition::create('string')
       ->setLabel(t('Leaflet Style'))
       ->setDescription(t('Stores leaflet style data as JSON.'));

@@ -36,14 +36,18 @@ class GeojsonManagedFile extends ManagedFile {
 
         // Check if the file field has a value.
         $fids = $form_state->getValue([$field_name, $delta, 'file', 'fids']) ?? null;
+        $id = $form_state->getValue([$field_name, $delta, 'file_upload_status_id']) ?? null;
         if (isset($fids) && is_array($fids) && count($fids) > 0) {
             // Set the file status to 1.
             $file_status = 1;
             // Set the file status in the form state.
-            $form_state->set(['file_status', $delta], 1);
+            
+            // TODO : il faut choisir un autre index que les deltas
+            //  car la suppression reindexe les deltas.
+            $form_state->set(['file_status', $id], 1);
         } else {
             $file_status = 0;
-            $form_state->set(['file_status', $delta], 0);
+            $form_state->set(['file_status', $id], 0);
         }
 
         // Add an AJAX command to update the file status.

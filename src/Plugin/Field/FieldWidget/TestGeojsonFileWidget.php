@@ -66,6 +66,17 @@ class TestGeojsonFileWidget extends WidgetBase {
     }
     $geojson_mapping = is_array($geojson_mapping) ? $geojson_mapping : [];
 
+    $file_upload_status_id = $values->file_upload_status_id ?? $form_state->getUserInput()[$items->getName()][$delta]['file_upload_status_id'] ?? null; 
+    if (! $file_upload_status_id) {
+      // if(!$form_state->get(['file_status', $delta])) {
+        $uuid = \Drupal::service('uuid')->generate();
+        $form_state->set(['file_status', $uuid], 0);
+      }
+      else {
+        $uuid = $file_upload_status_id;
+      }
+
+      
     if ((!$form_state->isRebuilding()) || (!$form_state->isSubmitted()) ||
       null === $form_state->get(['geojson_attributs', $delta])
     ) {
@@ -77,13 +88,13 @@ class TestGeojsonFileWidget extends WidgetBase {
         $fid = reset($form_state->getValue($items->getName())[$delta]['file']);
       } else {
         $fid = -1;
-        $form_state->set(['file_status', $delta], 0);
+        $form_state->set(['file_status', $uuid], 0);
       }
       // Récupérer les attributs du fichier GeoJSON.
       if ($fid > 0) {
         $attribs = static::getGeojsonAttributs($form, $form_state, $fid);
         $form_state->set(['geojson_attributs', $delta], $attribs);
-        $form_state->set(['file_status', $delta], 1);
+        $form_state->set(['file_status', $uuid], 1);
       }
     }
 
@@ -97,7 +108,7 @@ class TestGeojsonFileWidget extends WidgetBase {
 
     $element['file'] = [
       '#type' => 'geojson_managed_file',
-      '#title' => t('GeoJSON File'),
+      '#title' => t('Fichier "' . $value->nom .'"' ?? 'GeoJSON File'),
       '#upload_location' => 'public://geojson/', // Chemin où les fichiers seront stockés
       '#default_value' => isset($value->file) ? $value->file : NULL,
       '#weight' => 10,
@@ -112,13 +123,41 @@ class TestGeojsonFileWidget extends WidgetBase {
         'data-delta' => $delta,
       ],
     ];
+$element['infos'] = [
+      '#type' => 'details',
+      '#title' => t('Informations'),
+      '#weight' => 12,
+    ];
 
+    $element['infos']['nom'] = [
+      '#type' => 'textfield',
+      '#title' => t('Nom de la trace'),
+      '#default_value' => $value->nom ?? '',
+      '#weight' => 15,
+    ];
+   
+    $element['infos']['description'] = [
+      '#type' => 'textarea',
+      '#title' => t('Description'),
+      '#default_value' => $value->description ?? '',
+      '#weight' => 16,
+    ];
 
-    // Champ caché pour stocker l'état du fichier.
-    $element['file_upload_status'] = [
+    // Champ caché pour identifier les données meme apres les re-indexations.
+    $element['file_upload_status_id'] = [
       '#type' => 'hidden',
-      '#default_value' => $form_state->get(['file_status', $delta]) ?? 0,
-      '#value' => $form_state->get(['file_status', $delta]) ?? 0,
+      '#value' => $uuid,
+      '#attributes' => [
+        'class' => ['file-upload-status-id-' . $delta],
+        'id' => 'file-upload-status-id-'. $uuid,
+      ],
+    ];
+
+     // Champ caché pour stocker l'état du fichier.
+     $element['file_upload_status'] = [
+      '#type' => 'hidden',
+      '#default_value' => $form_state->get(['file_status', $uuid]) ?? 0,
+      '#value' => $form_state->get(['file_status', $uuid]) ?? 0,
       '#attributes' => [
         'class' => ['file-upload-status-' . $delta],
         'id' => 'file-upload-status-id',
@@ -541,4 +580,51 @@ class TestGeojsonFileWidget extends WidgetBase {
     }
     return $props_uniq;
   }
+
+    /**
+   * Ajax refresh callback for the "Remove" button.
+   *
+   * This returns the new widget element content to replace
+   * the previous content made obsolete by the form submission.
+   *
+   * @param array $form
+   *   The form array to remove elements from.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form.
+   */
+  /**
+   * {@inheritDoc}
+   *
+   * @param array $form
+   * @param FormStateInterface $form_state
+   * @return void
+   */
+  public static function deleteAjax(array &$form, FormStateInterface $form_state) {
+
+    // !!!!! Reindex les elements !!!!
+    $form = parent::deleteAjax($form, $form_state);
+    $button = $form_state->getTriggeringElement();
+
+    // Met a jour file_status en supprimant cette entrée
+    $file_status=$form_state->get('file_status');
+    unset($file_status[$button['#parents'][1]]);
+    $form_state->set('file_status', $file_status);
+
+    return $form;
+  }
+
+  public static function deleteSubmit(&$form, FormStateInterface $form_state) {
+
+    // avant la suppression et reindexation, met a jour le tableau file_status
+    $button = $form_state->getTriggeringElement();
+    $delta = (int) $button['#delta'];
+    $field_name = $button['#parents'][0];
+    $id = ($form_state->getUserInput())[$field_name][$delta]['file_upload_status_id'] ?? null;
+    $file_status=$form_state->get('file_status');
+    unset($file_status[$id]);
+    $form_state->set('file_status', $file_status);
+    
+    parent::deleteSubmit($form, $form_state);
+  }
+
 }
