@@ -40,25 +40,27 @@ class LeafletStyle extends FormElementBase {
       $item = [];
     }
 
+    // Charger la configuration par défaut.
+  $default_config = self::defaultConfiguration();
 
     $element['stroke'] = [
       '#type' => 'checkbox',
       '#title' => t('<em>Stroke</em> field'),
-      '#default_value' => isset($item['stroke']) ? $item['stroke'] : TRUE,
+      '#default_value' => isset($item['stroke']) ? $item['stroke'] : $default_config['stroke'],
       '#description' => t('Whether to draw stroke along the path.<br>Set it to false to disable borders on polygons or circles.'),
       '#weight' => 1,
     ];
     $element['color'] = [
       '#type' => 'color',
       '#title' => t('<em>Color</em> field'),
-      '#default_value' => isset($item['color']) ? $item['color'] : '#F00FE8',
+      '#default_value' => isset($item['color']) ? $item['color'] : $default_config['color'],
       '#description' => t('Stroke color.'),
       '#weight' => 2,
     ];
     $element['weight'] = [
       '#type' => 'number',
       '#title' => t('<em>Weight</em> field'),
-      '#default_value' => isset($item['weight']) ? $item['weight'] : 6,
+      '#default_value' => isset($item['weight']) ? $item['weight'] : $default_config['weight'],
       '#description' => t('Stroke width in pixels.'),
       '#min' => 1,
       '#step' => 1,
@@ -68,7 +70,7 @@ class LeafletStyle extends FormElementBase {
     $element['opacity'] = [
       '#type' => 'range',
       '#title' => t('<em>Opacity</em> field'),
-      '#default_value' => isset($item['opacity']) ? $item['opacity'] : 1,
+      '#default_value' => isset($item['opacity']) ? $item['opacity'] : $default_config['opacity'],
       '#description' => t('Stroke opacity.'),
       '#min' => 0,
       '#max' => 1,
@@ -78,7 +80,7 @@ class LeafletStyle extends FormElementBase {
     $element['linecap'] = [
       '#type' => 'select',
       '#title' => t('<em>LineCap</em> field'),
-      '#default_value' => isset($item['linecap']) ? $item['linecap'] : 'round',
+      '#default_value' => isset($item['linecap']) ? $item['linecap'] : $default_config['linecap'],
       '#description' => t('A string that defines shape to be used at the end of the stroke.' .
         '<br>Butt : indicates that the stroke for each subpath does not extend beyond its two endpoints.' .
         '<br>Round : indicates that at the end of each subpath the stroke will be extended by a half circle with a diameter equal to the stroke width.' .
@@ -93,7 +95,7 @@ class LeafletStyle extends FormElementBase {
     $element['linejoin'] = [
       '#type' => 'select',
       '#title' => t('<em>LineJoin</em> field'),
-      '#default_value' => isset($item['linejoin']) ? $item['linejoin'] : 'round',
+      '#default_value' => isset($item['linejoin']) ? $item['linejoin'] : $default_config['linejoin'],
       '#description' => t('A string that defines shape to be used at the corners of the stroke.' .
         '<br>Arcs : indicates that an arcs corner is to be used to join path segments.' .
         '<br>Bevel : indicates that a bevelled corner is to be used to join path segments.' .
@@ -112,7 +114,7 @@ class LeafletStyle extends FormElementBase {
     $element['dasharray'] = [
       '#type' => 'textfield',
       '#title' => t('<em>dashArray</em> field'),
-      '#default_value' => isset($item['dasharray']) ? $item['dasharray'] : NULL,
+      '#default_value' => isset($item['dasharray']) ? $item['dasharray'] : $default_config,
       '#description' => t('A string that defines the stroke <a href="https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-linejoin>dash pattern</a>. Doesn\'t work on Canvas-powered layers in some old browsers.'),
       '#maxlength' => 64,
       '#pattern' => '([0-9]+)(,[0-9]+)*',
@@ -121,7 +123,7 @@ class LeafletStyle extends FormElementBase {
     $element['dashoffset'] = [
       '#type' => 'textfield',
       '#title' => t('<em>dashOffset</em> field'),
-      '#default_value' => isset($item['dashoffset']) ? $item['dashoffset'] : 0,
+      '#default_value' => isset($item['dashoffset']) ? $item['dashoffset'] : $default_config['dashoffset'],
       '#description' => t('A string that defines the <a href="https://developer.mozilla.org/docs/Web/SVG/Attribute/stroke-dashoffset">distance into the dash</a> pattern to start the dash.'),
       '#maxlength' => 64,
       '#pattern' => '([0-9]+)|([0-9]+%)',
@@ -130,21 +132,21 @@ class LeafletStyle extends FormElementBase {
     $element['fill'] = [
       '#type' => 'checkbox',
       '#title' => t('<em>Fill</em> field'),
-      '#default_value' => isset($item['fill']) ? $item['fill'] : FALSE,
+      '#default_value' => isset($item['fill']) ? $item['fill'] : $default_config['fill'],
       '#description' => t('Whether to fill the path with color. Set it to false to disable filling on polygons or circle'),
       '#weight' => 9,
     ];
     $element['fill_color'] = [
       '#type' => 'color',
       '#title' => t('<em>Fill Color</em> field'),
-      '#default_value' => isset($item['fill_color']) ? $item['fill_color'] : '#C7A8A8',
+      '#default_value' => isset($item['fill_color']) ? $item['fill_color'] : $default_config['fill_color'],
       '#description' => t('Fill Color.'),
       '#weight' => 10,
     ];
     $element['fill_opacity'] = [
       '#type' => 'range',
       '#title' => t('<em>Fill Opacity</em> field'),
-      '#default_value' => isset($item['fill_opacity']) ? $item['fill_opacity'] : 0.2,
+      '#default_value' => isset($item['fill_opacity']) ? $item['fill_opacity'] : $default_config['fill_opacity'],
       '#description' => t('Stroke opacity.'),
       '#min' => 0,
       '#max' => 1,
@@ -154,10 +156,10 @@ class LeafletStyle extends FormElementBase {
     $element['fillrule'] = [
       '#type' => 'select',
       '#title' => t('<em>Fill Rule</em> field'),
-      '#default_value' => isset($item['fillrule']) ? $item['fillrule'] : 'evenodd',
+      '#default_value' => isset($item['fillrule']) ? $item['fillrule'] : $default_config['fillrule'],
       '#description' => t('A string that defines <a href="https://developer.mozilla.org/docs/Web/SVG/Attribute/fill-rule">how the inside of a shape</a> is determined.' .
-      '<br>Nonzero : determines the "insideness" of a point in the shape by drawing a ray from that point to infinity in any direction, and then examining the places where a segment of the shape crosses the ray' .
-      '<br>Evenodd : determines the "insideness" of a point in the shape by drawing a ray from that point to infinity in any direction and counting the number of path segments from the given shape that the ray crosses.'),
+        '<br>Nonzero : determines the "insideness" of a point in the shape by drawing a ray from that point to infinity in any direction, and then examining the places where a segment of the shape crosses the ray' .
+        '<br>Evenodd : determines the "insideness" of a point in the shape by drawing a ray from that point to infinity in any direction and counting the number of path segments from the given shape that the ray crosses.'),
       '#options' => [
         'nonzero ' => 'Nonzero',
         'evenodd' => 'Evenodd',
@@ -167,4 +169,34 @@ class LeafletStyle extends FormElementBase {
 
     return $element;
   }
+
+  /**
+   * Prétraiter l'élément pour appliquer les valeurs par défaut.
+   */
+  public static function preRenderCustomElement($element) {
+    $a=$element;
+
+    return $element;
+  }
+
+   /**
+   * Retourne les valeurs par défaut.
+   */
+  public static function defaultConfiguration() {
+    return [
+      'stroke' => true,
+      'color' => '#F00FE8',
+      'weight' => 6,
+      'opacity' => 1,
+      'linecap' => 'round',
+      'linejoin' => 'round',
+      'dasharray' => NULL,
+      'dashoffset' => 0,
+      'fill' => false,
+      'fill_color' => '#C7A8A8',
+      'fill_opacity' => 0.2,
+      'fillrule' => 'evenodd',
+    ];
+  }
+
 }

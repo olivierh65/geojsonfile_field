@@ -27,13 +27,29 @@ class GeojsonFileWidget extends WidgetBase {
    * {@inheritdoc}
    */
   protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
+    // Définir les propriétés du champ.    
+    $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
+    $element['#multiple'] = true;
+    $element['#tree'] = true;
+
     $elements = parent::formMultipleElements($items, $form, $form_state);
 
-    $elements['#title'] = 'Liste des fichiers';
+    $max_geojson_file = $this->getSetting('max_geojson_file') ?? $this->getSetting('max_geojson_file');
+
+    $elements['#title'] = 'Liste des fichiers (max : ' . $max_geojson_file . ')';
     $elements['#attributes'] = [
       'class' => ['geojsonfiled_liste_fichiers'],
     ];
 
+    if ($elements['#max_delta'] < ($max_geojson_file - 1)) {
+      // Nombre maxi de fichier.
+      // #max_delta est le nombre de fichiers actuellement affichés - 1
+      // (indice de tableau 0-based).
+      $elements[0] = $this->formElement($items, 0, $elements[0], $form, $form_state);
+    } else {
+      // si le nombre de fichiers max est atteint, n'affiche plus le bouton "Add more".
+      unset($elements['add_more']);
+    }
     // Personnaliser le bouton "Add more".
     $elements['add_more']['#value'] = $this->t('Ajouter un fichier geojson');
 
@@ -66,17 +82,16 @@ class GeojsonFileWidget extends WidgetBase {
     }
     $geojson_mapping = is_array($geojson_mapping) ? $geojson_mapping : [];
 
-    $file_upload_status_id = $values->file_upload_status_id ?? $form_state->getUserInput()[$items->getName()][$delta]['file_upload_status_id'] ?? null; 
+    $file_upload_status_id = $values->file_upload_status_id ?? $form_state->getUserInput()[$items->getName()][$delta]['file_upload_status_id'] ?? null;
     if (! $file_upload_status_id) {
       // if(!$form_state->get(['file_status', $delta])) {
-        $uuid = \Drupal::service('uuid')->generate();
-        $form_state->set(['file_status', $uuid], 0);
-      }
-      else {
-        $uuid = $file_upload_status_id;
-      }
+      $uuid = \Drupal::service('uuid')->generate();
+      $form_state->set(['file_status', $uuid], 0);
+    } else {
+      $uuid = $file_upload_status_id;
+    }
 
-      
+
     if ((!$form_state->isRebuilding()) || (!$form_state->isSubmitted()) ||
       null === $form_state->get(['geojson_attributs', $delta])
     ) {
@@ -98,23 +113,17 @@ class GeojsonFileWidget extends WidgetBase {
       }
     }
 
-    // Définir les propriétés du champ.    
-    $element['#cardinality'] = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
-    $element['#multiple'] = true;
-    $element['#tree'] = true;
-    // Nombre maxi de fichiers
-    $element['#max_delta'] = 10;
     $element['#title'] = 'Fichier N° ' . $delta + 1;
 
     $element['file'] = [
       '#type' => 'geojson_managed_file',
-      '#title' => t('Fichier "' . $value->nom .'"' ?? 'GeoJSON File'),
+      '#title' => t(isset($value->nom) ? 'Fichier "' . $value->nom . '"' : 'GeoJSON File ' . $delta),
       '#upload_location' => 'public://geojson/', // Chemin où les fichiers seront stockés
       '#default_value' => isset($value->file) ? $value->file : NULL,
       '#weight' => 10,
       '#multiple' => FALSE,
       '#upload_validators' => [
-        'file_validate_extensions' => ['geojson jpg pdf'],  // Pour restreindre les extensions de fichier (optionnel)
+        'file_validate_extensions' => ['geojson'],  // Pour restreindre les extensions de fichier (optionnel)
       ],
       '#widget_class' => static::class, // Ajout d'une référence à la classe.
       '#accept' => '.geojson',
@@ -123,7 +132,7 @@ class GeojsonFileWidget extends WidgetBase {
         'data-delta' => $delta,
       ],
     ];
-$element['infos'] = [
+    $element['infos'] = [
       '#type' => 'details',
       '#title' => t('Informations'),
       '#weight' => 12,
@@ -135,7 +144,7 @@ $element['infos'] = [
       '#default_value' => $value->nom ?? '',
       '#weight' => 15,
     ];
-   
+
     $element['infos']['description'] = [
       '#type' => 'textarea',
       '#title' => t('Description'),
@@ -149,12 +158,12 @@ $element['infos'] = [
       '#value' => $uuid,
       '#attributes' => [
         'class' => ['file-upload-status-id-' . $delta],
-        'id' => 'file-upload-status-id-'. $uuid,
+        'id' => 'file-upload-status-id-' . $uuid,
       ],
     ];
 
-     // Champ caché pour stocker l'état du fichier.
-     $element['file_upload_status'] = [
+    // Champ caché pour stocker l'état du fichier.
+    $element['file_upload_status'] = [
       '#type' => 'hidden',
       '#default_value' => $form_state->get(['file_status', $uuid]) ?? 0,
       '#value' => $form_state->get(['file_status', $uuid]) ?? 0,
@@ -183,7 +192,7 @@ $element['infos'] = [
     $element['style_global']['style'] = [
       '#type' => 'leaflet_style',
       '#title' => t('Leaflet Style'),
-      '#default_value' => $value->style_global['style'] ?? [],
+      '#default_value' => $value->style_global['style'] ?? $this->getSetting('leaflet_style') ?? [],
     ];
 
     $element['mapping'] = [
@@ -581,7 +590,7 @@ $element['infos'] = [
     return $props_uniq;
   }
 
-    /**
+  /**
    * Ajax refresh callback for the "Remove" button.
    *
    * This returns the new widget element content to replace
@@ -606,7 +615,7 @@ $element['infos'] = [
     $button = $form_state->getTriggeringElement();
 
     // Met a jour file_status en supprimant cette entrée
-    $file_status=$form_state->get('file_status');
+    $file_status = $form_state->get('file_status');
     unset($file_status[$button['#parents'][1]]);
     $form_state->set('file_status', $file_status);
 
@@ -620,11 +629,74 @@ $element['infos'] = [
     $delta = (int) $button['#delta'];
     $field_name = $button['#parents'][0];
     $id = ($form_state->getUserInput())[$field_name][$delta]['file_upload_status_id'] ?? null;
-    $file_status=$form_state->get('file_status');
+    $file_status = $form_state->get('file_status');
     unset($file_status[$id]);
     $form_state->set('file_status', $file_status);
-    
+
     parent::deleteSubmit($form, $form_state);
   }
 
+
+  //////////////////////////////////////////////////////////////
+  /**
+   * {@inheritdoc}
+   */
+  public static function defaultSettings() {
+    return [
+      'max_geojson_file' => '5',
+      'leaflet_style' => [
+        '#input' => TRUE,
+       '#process' => [
+          ['Drupal\Core\Render\Element\FormElement', 'processGroup'],
+        ],
+        '#pre_render' => [
+          ['Drupal\geojsonfile_field\Element\LeafletStyle', 'preRenderCustomElement'],
+        ],
+      ],
+    ] + parent::defaultSettings();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function settingsForm(array $form, FormStateInterface $form_state) {
+
+    $form['max_geojson_file'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Max Geojson File'),
+      '#default_value' => $this->getSetting('max_geojson_file'),
+      '#description' => $this->t('Nombre maxi de fichiers Geojson.'),
+    ];
+
+    $form['style'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Style Leaflet'),
+      '#open' => false,
+    ];
+
+    $form['style']['leaflet_style'] = [
+      '#type' => 'leaflet_style',
+      '#title' => $this->t('Leaflet Style'),
+      '#default_value' => $this->getSetting('leaflet_style'),
+      '#description' => $this->t('Style de rendu Leaflet.'),
+    ];
+
+    return $form;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function settingsSummary() {
+
+    $default_style= \Drupal\geojsonfile_field\Element\LeafletStyle::defaultConfiguration();
+
+    $summary = [];
+
+    $summary[] = $this->t('Max Geojson File: @max_geojson_file', ['@max_geojson_file' => $this->getSetting('max_geojson_file')]);
+    $summary[] = $this->t('Largeur trace: @weight', ['@weight' => $this->getSetting('leaflet_style')['weight'] ?? $default_style['weight']]);
+    $summary[] = $this->t('Couleur trace: @color', ['@color' => $this->getSetting('leaflet_style')['color'] ?? $default_style['color']]);
+
+    return $summary;
+  }
 }
