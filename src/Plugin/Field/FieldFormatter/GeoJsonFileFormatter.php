@@ -9,14 +9,14 @@ use Drupal\Core\Field\FieldItemListInterface;
  * Plugin implementation of the 'test_geojsonfile_formatter'.
  *
  * @FieldFormatter(
- *   id = "test_geojsonfile_formatter",
- *   label = @Translation("Test GeoJSON File Formatter"),
+ *   id = "geojsonfile_formatter",
+ *   label = @Translation("GeoJSON File Formatter"),
  *   field_types = {
- *     "test_geojsonfile"
+ *     "geojsonfile"
  *   }
  * )
  */
-class TestGeoJsonFileFormatter extends FormatterBase {
+class GeoJsonFileFormatter extends FormatterBase {
 
   /**
    * {@inheritdoc}

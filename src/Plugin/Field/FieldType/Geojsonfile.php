@@ -7,18 +7,18 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\TypedData\DataDefinition;
 
 /**
- * Plugin implementation of the 'test_geojsonfile' field type.
+ * Plugin implementation of the 'geojsonfile' field type.
  *
  * @FieldType(
- *   id = "test_geojsonfile",
- *   label = @Translation("Test GeoJSON File"),
+ *   id = "geojsonfile",
+ *   label = @Translation("GeoJSON File"),
  *   description = @Translation("A custom field with a managed file and test leaflet style."),
- *   default_widget = "test_geojsonfile_widget",
- *   default_formatter = "test_geojsonfile_formatter",
- *   list_class = "\Drupal\geojsonfile_field\Plugin\Field\TestGeojsonfileItemList"
+ *   default_widget = "geojsonfile_widget",
+ *   default_formatter = "geojsonfile_formatter",
+ *   list_class = "\Drupal\geojsonfile_field\Plugin\Field\GeojsonfileItemList"
  * )
  */
-class TestGeojsonfile extends FieldItemBase {
+class Geojsonfile extends FieldItemBase {
 
   /**
    * {@inheritdoc}

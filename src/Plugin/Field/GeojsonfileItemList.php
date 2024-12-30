@@ -6,7 +6,7 @@ use Drupal\Core\Field\FieldItemList;
 use \Drupal\file\Entity\File;
 use Drupal\Core\TypedData\Validation\TypedDataAwareValidatorTrait;
 
-class TestGeojsonfileItemList extends FieldItemList {
+class GeojsonfileItemList extends FieldItemList {
 
     use TypedDataAwareValidatorTrait;
 
