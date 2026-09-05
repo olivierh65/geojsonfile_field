@@ -11,3 +11,21 @@ update_value:
   dependencies:
     - core/jquery
     - core/drupalSettings
+
+update_file:
+  version: 1.x
+  js:
+    js/updateManagedFileField.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupalSettings
+    - core/once
+
+refresh_file:
+  version: 1.x
+  js:
+    js/refreshManagedFile.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupalSettings
+    - core/once

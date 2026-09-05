@@ -29,19 +29,27 @@ class GeojsonManagedFile extends ManagedFile {
     public static function uploadAjaxCallback(&$form, FormStateInterface &$form_state, Request $request) {
         // Call the parent method to handle file upload logic.
         $response = parent::uploadAjaxCallback($form, $form_state, $request);
-        
-        $trigger= $form_state->getTriggeringElement();
+
+        return GeojsonManagedFile::updateFileStatus($form, $form_state, $response);
+    }
+
+    public static function updateFileStatus(&$form, FormStateInterface &$form_state, AjaxResponse $response) {
+        $trigger = $form_state->getTriggeringElement();
         $delta = $trigger['#parents'][1];
         $field_name = $trigger['#parents'][0];
 
+
         // Check if the file field has a value.
-        $fids = $form_state->getValue([$field_name, $delta, 'file', 'fids']) ?? null;
+        $fids = $form_state->getValue([$field_name, $delta, 'selection_fichier', 'upload', 'fids', '0']) ??
+            $form_state->getValue([$field_name, $delta, 'selection_fichier', 'select_existing']) ?? null;
         $id = $form_state->getValue([$field_name, $delta, 'file_upload_status_id']) ?? null;
-        if (isset($fids) && is_array($fids) && count($fids) > 0) {
+        if (isset($fids) && !is_array($fids) && $fids > 0) {
             // Set the file status to 1.
             $file_status = 1;
             // Set the file status in the form state.
-            
+           if (null !== ($form_state->getValue([$field_name, $delta, 'selection_fichier', 'upload', 'fids', '0']))) {
+                $form_state->setValue([$field_name, $delta, 'selection_fichier', 'upload', 'fids', '0'], $fids);
+            }
             // TODO : il faut choisir un autre index que les deltas
             //  car la suppression reindexe les deltas.
             $form_state->set(['file_status', $id], 1);
@@ -55,5 +63,4 @@ class GeojsonManagedFile extends ManagedFile {
 
         return $response;
     }
-
 }

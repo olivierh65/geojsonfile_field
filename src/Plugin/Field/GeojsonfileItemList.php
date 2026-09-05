@@ -24,11 +24,21 @@ class GeojsonfileItemList extends FieldItemList {
                 // Le champ file doit être un ID de fichier valide.
                 $file = File::load($item->file);
                 if ($file) {
+                    switch (pathinfo($file->getFileUri(), PATHINFO_EXTENSION)) {
+                        case 'geojson':
+                            $file->setMimeType('application/json');
+                            break;
+                        default:
+                            // Si le fichier n'est pas un fichier GeoJSON, définissez le champ sur NULL.
+                            $file->setMimeType('application/octet-stream');
+                            break;
+                    }
                     if ($file->isTemporary()) {
                         // Déplacer le fichier vers permanent
                         $file->setPermanent();
-                        $file->save();
                     }
+                    $file->save();
+
                     $item->file = $file ? $file->id() : NULL;
                 }
             }
@@ -40,7 +50,7 @@ class GeojsonfileItemList extends FieldItemList {
         parent::preSave(); // Appelez la méthode parent pour effectuer la sauvegarde
     }
 
-/**
+    /**
      * Appelé après la sauvegarde des éléments du champ.
      */
     public function setValue($values, $notify = TRUE) {
@@ -51,11 +61,12 @@ class GeojsonfileItemList extends FieldItemList {
                         $value[$property_name] = !empty($value[$property_name]) ? [(int) $value[$property_name]] : [];
                         // Retourne un tableau contenant l'ID du fichier pour le widget `managed_file`.
                         break;
-                        case'nom':
-                            case 'description':
-                                // Récupérer les valeurs de champ `nom` et `description`.
-                                // Ces champs sont des champs de texte simples, donc pas besoin de traitement
-                                break;
+                    case 'nom':
+                    case 'description':
+                    case 'onverlay':
+                        // Récupérer les valeurs de champ `nom` et `description`.
+                        // Ces champs sont des champs de texte simples, donc pas besoin de traitement
+                        break;
 
                     case 'style':
                         if (!empty($value[$property_name]) && is_string($value[$property_name])) {
@@ -89,7 +100,11 @@ class GeojsonfileItemList extends FieldItemList {
                 continue;
             }
             // Récupérer l'ID du fichier.
-            $file_id = !empty($value['file']) && is_array($value['file']) ? reset($value['file']) : NULL;
+            if (isset($value['selection_fichier']) && is_array($value['selection_fichier']) && isset($value['selection_fichier']['upload'])) {
+                $file_id = $value['selection_fichier']['upload'][0] ?? $value['selection_fichier']['select_existing'] ?? NULL;
+            } else {
+                $file_id = !empty($value['selection_fichier']) && is_array($value['selection_fichier']) ? reset($value['selection_fichier']) : NULL;
+            }
 
             // Extraire le style depuis le conteneur `style_global`.
             $style = isset($value['style_global']['style']) ? $value['style_global']['style'] : NULL;
@@ -108,6 +123,8 @@ class GeojsonfileItemList extends FieldItemList {
                 'file' => $file_id ? (int) $file_id : NULL,
                 'nom' => !empty($value['infos']['nom']) ? $value['infos']['nom'] : NULL,
                 'description' => !empty($value['infos']['description']) ? $value['infos']['description'] : NULL,
+                'overlay' => !empty($value['infos']['overlay']) ? $value['infos']['overlay'] : NULL,
+                'anonyme_access' => !empty($value['infos']['anonyme_access']) ? $value['infos']['anonyme_access'] : NULL,
                 'style' => !empty($style) ? json_encode($style) : NULL,
                 'mapping' => !empty($mapping) ? json_encode($mapping) : NULL,
             ];
@@ -120,10 +137,12 @@ class GeojsonfileItemList extends FieldItemList {
         switch ($property_name) {
             case 'file':
                 // Retourne un tableau contenant l'ID du fichier pour le widget `managed_file`.
-                return !empty($this->values['file']) ? [(int) $this->values['file']] : [];
+                return !empty($this->values['selection_fichier']) ? [(int) $this->values['selection_fichier']] : [];
 
             case 'nom':
             case 'description':
+            case 'overlay':
+            case 'anonyme_access':
                 return $this->values[$property_name];
                 break;
 

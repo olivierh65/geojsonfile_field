@@ -1,0 +1,10 @@
+
+
+
+geojsonfile_field.autocomplete_file:
+  path: '/geojsonfile_field/autocomplete/file'
+  defaults:
+    _controller: '\Drupal\geojsonfile_field\Controller\FileAutocompleteController::handleAutocomplete'
+    _title: 'File autocomplete'
+  requirements:
+    _permission: 'access content'

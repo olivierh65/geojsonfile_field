@@ -38,6 +38,14 @@ class Geojsonfile extends FieldItemBase {
           'type' => 'text',
           'size' => 'big',
         ],
+        'overlay' => [
+          'type' => 'int',
+          'unsigned' => TRUE,
+        ],
+        'anonyme_access' => [
+          'type' => 'int',
+          'unsigned' => TRUE,
+        ],
         'style' => [
           'type' => 'text',
           'size' => 'big',
@@ -67,6 +75,14 @@ class Geojsonfile extends FieldItemBase {
       $properties['description'] = DataDefinition::create('string')
       ->setLabel(t('Description'))
       ->setDescription(t('Description de la trace.'));
+
+    $properties['overlay'] = DataDefinition::create('integer')  
+      ->setLabel(t('Overlay'))
+      ->setDescription(t('Cette trace doit-elle affichée dans un overlay?'));
+      
+    $properties['anonyme_access'] = DataDefinition::create('integer')
+      ->setLabel(t('Anonyme Access'))
+      ->setDescription(t('Cette trace est-elle accessible par un utilisateur anonyme?'));
       
     $properties['style'] = DataDefinition::create('string')
       ->setLabel(t('Leaflet Style'))

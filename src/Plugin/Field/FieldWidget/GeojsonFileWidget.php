@@ -8,7 +8,10 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Component\Utility\NestedArray;
 use \Drupal\file\Entity\File;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
-
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\ReplaceCommand;
+use Drupal\file\Element\ManagedFile;
+use Drupal\geojsonfile_field\Element\GeojsonManagedFile;
 
 /**
  * Plugin implementation of the 'test_geojsonfile_widget'.
@@ -41,7 +44,7 @@ class GeojsonFileWidget extends WidgetBase {
       'class' => ['geojsonfiled_liste_fichiers'],
     ];
 
-    if ($elements['#max_delta'] < ($max_geojson_file - 1)) {
+    if ((!isset($elements['#max_delta'])) || ($elements['#max_delta'] < ($max_geojson_file - 1))) {
       // Nombre maxi de fichier.
       // #max_delta est le nombre de fichiers actuellement affichés - 1
       // (indice de tableau 0-based).
@@ -99,8 +102,8 @@ class GeojsonFileWidget extends WidgetBase {
       if (isset($value->file)) {
         $temp = $value->file;
         $fid = reset($temp);
-      } elseif (isset($form_state->getValue($items->getName())[$delta]['file'])) {
-        $fid = reset($form_state->getValue($items->getName())[$delta]['file']);
+      } elseif (isset($form_state->getValue($items->getName())[$delta]['selection_fichier']['upload'])) {
+        $fid = reset($form_state->getValue($items->getName())[$delta]['selection_fichier']['upload']);
       } else {
         $fid = -1;
         $form_state->set(['file_status', $uuid], 0);
@@ -115,27 +118,82 @@ class GeojsonFileWidget extends WidgetBase {
 
     $element['#title'] = 'Fichier N° ' . $delta + 1;
 
-    $element['file'] = [
-      '#type' => 'geojson_managed_file',
-      '#title' => t(isset($value->nom) ? 'Fichier "' . $value->nom . '"' : 'GeoJSON File ' . $delta),
-      '#upload_location' => 'public://geojson/', // Chemin où les fichiers seront stockés
-      '#default_value' => isset($value->file) ? $value->file : NULL,
-      '#weight' => 10,
-      '#multiple' => FALSE,
-      '#upload_validators' => [
-        'file_validate_extensions' => ['geojson'],  // Pour restreindre les extensions de fichier (optionnel)
-      ],
-      '#widget_class' => static::class, // Ajout d'une référence à la classe.
-      '#accept' => '.geojson',
+    // Wrapper pour le widget.
+
+    if (isset($value->file) && is_array($value->file)  && $value->file[0] > 1) {
+      $def_file = $value->file;
+    } elseif (isset($form_state->getValue($items->getName())[$delta]['selection_fichier']['select_existing'])) {
+      $def_file = $form_state->getValue($items->getName())[$delta]['selection_fichier']['select_existing'];
+    } else {
+      $def_file = null;
+    }
+
+    $element['selection_fichier'] = [
+      '#type' => 'fieldset',
+      '#title' => t('Fichier GeoJSON'),
+      '#prefix' => '<div id="selection_fichier-' . $delta . '">',
+      '#suffix' => '</div>',
       '#attributes' => [
-        'class' => ['file-upload-' . $delta],
+        'class' => ['selection_fichier-' . $delta],
         'data-delta' => $delta,
       ],
+      // Sous-champ pour télécharger un nouveau fichier.
+      'upload' => [
+        '#type' => 'geojson_managed_file',
+        '#title' => t(isset($value->nom) ? 'Fichier "' . $value->nom . '"' : 'GeoJSON File ' . $delta),
+        '#upload_location' => 'public://geojson/', // Chemin où les fichiers seront stockés
+        '#default_value' => $def_file,
+        '#weight' => 10,
+        '#multiple' => FALSE,
+        '#upload_validators' => [
+          'file_validate_extensions' => ['geojson'],  // Pour restreindre les extensions de fichier (optionnel)
+        ],
+        '#widget_class' => static::class, // Ajout d'une référence à la classe.
+        '#accept' => '.geojson',
+        '#attributes' => [
+          'class' => ['selection_fichier-upload-' . $delta],
+          'data-delta' => $delta,
+        ],
+      ],
+      // Sous-champ pour sélectionner un fichier existant.
+      'select_existing' => [
+        '#type' => 'textfield',
+        '#title' => $this->t('Select a file'),
+        '#default_value' => '',
+        '#autocomplete_route_name' => 'geojsonfile_field.autocomplete_file',
+        '#description' => $this->t('Start typing to search for existing files.'),
+        '#attributes' => [
+          'class' => ['selection_fichier-select-' . $delta],
+          'data-delta' => $delta,
+        ],
+        '#ajax' => [
+          'callback' => [$this, 'updateManagedFileCallback'],
+          'event' => 'autocompleteclose',
+          'wrapper' => 'selection_fichier-' . $delta, // Pas utilisé.
+        ],
+        '#prefix' => '<div id="selection_fichier-select-' . $delta . '">',
+        '#suffix' => '</div>',
+      ],
     ];
+
     $element['infos'] = [
       '#type' => 'details',
       '#title' => t('Informations'),
       '#weight' => 12,
+    ];
+
+    $element['infos']['overlay'] = [
+      '#type' => 'checkbox',
+      '#title' => t('Overlay'),
+      '#default_value' => $value->overlay ?? 0,
+      '#weight' => 13,
+    ];
+
+    $element['infos']['anonyme_access'] = [
+      '#type' => 'checkbox',
+      '#title' => t('Accès anonyme'),
+      '#default_value' => $value->anonyme_access ?? 0,
+      '#weight' => 14,
     ];
 
     $element['infos']['nom'] = [
@@ -375,20 +433,18 @@ class GeojsonFileWidget extends WidgetBase {
     ];
 
     // Définir un thème personnalisé pour cet élément.
-    $element['#theme'] = 'geojsonfile_field_widget_theme';
+    // $element['#theme'] = 'geojsonfile_field_widget_theme';
 
     // Ajouter des variables pour le thème.
     $element['#attached']['library'][] = 'geojsonfile_field/update_value';
-    return $element;
-  }
 
-  public function ___validateMyField(array &$element, FormStateInterface $form_state, array &$complete_form) {
-    $value = $form_state->getValue($element['#parents']);
-    $form_state->setValue($element['#parents']['#value'], $form_state->getValue([$element['#parents'][0], $element['#parents'][1], 'file_upload_status']));
-    // $element['#value']=$form_state->getValue([$element['#parents'][0], $element['#parents'][1], 'file_upload_status']);
-    if ($value < 0) {
-      $form_state->setError($element, $this->t('Value must be positive.'));
-    }
+    // script de mise à jour du fid
+    // $element['#attached']['library'][] = 'geojsonfile_field/update_file';
+
+    // script de refresh du formulaire
+    // $element['#attached']['library'][] = 'geojsonfile_field/refresh_file';
+
+    return $element;
   }
 
   public function updateStyleGlobalCallback(array &$form, FormStateInterface $form_state) {
@@ -397,11 +453,43 @@ class GeojsonFileWidget extends WidgetBase {
   }
 
 
+  public function updateManagedFileCallback(array &$form, FormStateInterface $form_state) {
+    // Identifie l'indice $delta de l'élément déclencheur.
+    $triggering_element = $form_state->getTriggeringElement();
+    $delta = $triggering_element['#attributes']['data-delta'];
+    $fieldname = $triggering_element['#parents'][0];
+    // Récupérer la valeur de `select_existing` (le fid).
+    $fid = $form_state->getValue(array_merge(array_slice($triggering_element['#parents'], 0, 3), ['select_existing']));
+
+    if ($fid > 1) {
+      // Charge le fichier et met à jour le champ managed_file.
+      // pour que le fichier soit affiché dans le champ.
+      $file = File::load($fid);
+      $form[$fieldname]['widget'][$delta]['selection_fichier']['upload']['#value']['fids'] = [$fid];
+      $form[$fieldname]['widget'][$delta]['selection_fichier']['upload']['#files'][$fid] = $file;
+      // Efface le fid retourné par le champ `select_existing`.
+      $form[$fieldname]['widget'][$delta]['selection_fichier']['select_existing']['#value'] = '';
+    }
+
+    $element = $form[$fieldname]['widget'][$delta]['selection_fichier'];
+    $element1 = ManagedFile::processManagedFile($element['upload'], $form_state, $complete_form);
+    // return $form[$fieldname]['widget'][$delta]['selection_fichier']['upload'];
+    $renderer = \Drupal::service('renderer');
+    $output = $renderer->renderRoot($element);
+
+    $response = new AjaxResponse();
+    $response->addCommand(new ReplaceCommand('#selection_fichier-' . $delta, $output));
+    $response = GeojsonManagedFile::updateFileStatus($form, $form_state, $response);
+
+    return $response;
+  }
+
+
   /**
    * Get options for the attribute select field.
    */
   protected function getAttributeOptions($index, $delta, $form_state) {
-    $options = $form_state->get(['geojson_attributs', $delta]);
+    $options = $form_state->get(['geojson_attributs', $delta]) ?? [];
     // $options = $form_state->getStorage()['geojson_attributs'][$delta];
     $options_select = [];
     foreach ($options as $key => $val) {
@@ -555,28 +643,58 @@ class GeojsonFileWidget extends WidgetBase {
 
   public static function getGeojsonAttributs($form, FormStateInterface &$form_state, $fid = -1) {
     $trigger = $form_state->getTriggeringElement();
+    $values = [];
     if ($trigger !== null) {
       $delta = $trigger['#parents'][1];
       $values = $form_state->getValue(reset($trigger['#parents']));
-      if (isset($values[$delta]['file']) && is_array(($values[$delta]['file']))) {
+      // Récupérer l'ID du fichier.
+      if (isset($values[$delta]['selection_fichier']) && is_array($values[$delta]['selection_fichier']) && isset($values[$delta]['selection_fichier']['upload'])) {
+        $fid = $values[$delta]['selection_fichier']['upload'][0] ?? $values[$delta]['selection_fichier']['select_existing'] ?? NULL;
+      } else {
+        $fid = !empty($values[$delta]['selection_fichier']) && is_array($values[$delta]['selection_fichier']) ? reset($values[$delta]['selection_fichier']) : NULL;
+      }
+      /* if (isset($values[$delta]['file']) && is_array(($values[$delta]['file']))) {
         if (isset($values[$delta]['file']['fids'])) {
           $fid = reset($values[$delta]['file']['fids']);
         } else {
           $fid = reset($values[$delta]['file']);
         }
-      }
+      } */
     }
     $props = [];
+    $props_uniq = [];
     if ($fid > 0) {
-      $file = File::Load($fid);
-      $cont = file_get_contents($file->getFileUri());
-      foreach (json_decode($cont, true)['features'] as $feature) {
-        if ($feature['type'] == "Feature") {
-          foreach ($feature['properties'] as $key => $val) {
-            $props[$key][] = $val;
+      try {
+        $file = File::Load($fid);
+        if ($file !== null) {
+          $uri = $file->getFileUri();
+          if ($uri && @file_exists($uri)) {
+            $cont = @file_get_contents($uri);
+            $decoded = is_string($cont) && $cont !== '' ? json_decode($cont, true) : NULL;
+            $features = is_array($decoded) ? ($decoded['features'] ?? []) : [];
+            if (is_array($features)) {
+              foreach ($features as $feature) {
+                if (!is_array($feature) || ($feature['type'] ?? NULL) !== 'Feature') {
+                  continue;
+                }
+                if (!isset($feature['properties']) || !is_array($feature['properties'])) {
+                  continue;
+                }
+                foreach ($feature['properties'] as $key => $val) {
+                  $props[$key][] = $val;
+                }
+              }
+            }
+          }
+          else {
+            \Drupal::logger('geojsonfile_field')->warning('GeoJSON file @fid is missing on disk (uri: @uri).', ['@fid' => $fid, '@uri' => $uri]);
           }
         }
+      } catch (\Exception $e) {
+        \Drupal::logger('geojsonfile_field')->error($e->getMessage());
       }
+    } else {
+      \Drupal::logger('geojsonfile_field')->info('$fid == 0.' . print_r($values[$delta]['selection_fichier'] ?? NULL, true));
     }
 
     foreach ($props as $key => $value) {
@@ -646,7 +764,7 @@ class GeojsonFileWidget extends WidgetBase {
       'max_geojson_file' => '5',
       'leaflet_style' => [
         '#input' => TRUE,
-       '#process' => [
+        '#process' => [
           ['Drupal\Core\Render\Element\FormElement', 'processGroup'],
         ],
         '#pre_render' => [
@@ -689,7 +807,7 @@ class GeojsonFileWidget extends WidgetBase {
    */
   public function settingsSummary() {
 
-    $default_style= \Drupal\geojsonfile_field\Element\LeafletStyle::defaultConfiguration();
+    $default_style = \Drupal\geojsonfile_field\Element\LeafletStyle::defaultConfiguration();
 
     $summary = [];
 
